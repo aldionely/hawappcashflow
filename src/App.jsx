@@ -1,27 +1,44 @@
 import React from "react";
 import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom";
 import { Toaster } from "@/components/ui/toaster";
+import { AuthProvider, useAuth } from "@/contexts/AuthContext";
+import { DataProvider } from "@/contexts/DataContext"; // 1. Impor DataProvider
 import Login from "@/pages/Login";
-import AdminDashboard from "@/pages/AdminDashboard";
-import WorkerDashboard from "@/pages/WorkerDashboard";
-import { AuthProvider } from "@/contexts/AuthContext";
-import { DataProvider } from "@/contexts/DataContext";
+import NewAdminDashboard from "@/pages/NewAdminDashboard";
+
+const ProtectedRoute = ({ children }) => {
+  const { user, loading } = useAuth();
+  if (loading) return <div>Loading...</div>;
+  if (!user) return <Navigate to="/login" replace />;
+  return children;
+};
+
+function AppContent() {
+  return (
+    <Router>
+      <Routes>
+        <Route path="/login" element={<Login />} />
+        <Route 
+          path="/dashboard" 
+          element={
+            <ProtectedRoute>
+              <NewAdminDashboard />
+            </ProtectedRoute>
+          } 
+        />
+        <Route path="*" element={<Navigate to="/dashboard" replace />} />
+      </Routes>
+    </Router>
+  );
+}
 
 function App() {
   return (
     <AuthProvider>
+      {/* 2. Bungkus AppContent dengan DataProvider */}
       <DataProvider>
-        <Router>
-          <div className="min-h-screen bg-gradient-to-br from-blue-100 to-purple-100">
-            <Routes>
-              <Route path="/" element={<Navigate to="/login" replace />} />
-              <Route path="/login" element={<Login />} />
-              <Route path="/admin/*" element={<AdminDashboard />} />
-              <Route path="/worker/*" element={<WorkerDashboard />} />
-            </Routes>
-            <Toaster />
-          </div>
-        </Router>
+        <AppContent />
+        <Toaster />
       </DataProvider>
     </AuthProvider>
   );

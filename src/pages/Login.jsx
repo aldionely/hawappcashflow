@@ -21,16 +21,10 @@ const Login = () => {
 
     if (loginResult.success) {
       if (loginResult.role === "admin") {
-        navigate("/admin");
+        navigate("/dashboard");
         toast({
           title: "Login berhasil",
           description: "Selamat datang di panel admin",
-        });
-      } else if (loginResult.role === "worker") {
-        navigate("/worker");
-        toast({
-          title: "Login berhasil",
-          description: "Selamat datang di panel pekerja",
         });
       }
     } else {
@@ -44,37 +38,50 @@ const Login = () => {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-4">
+    <div className="min-h-screen flex items-center justify-center p-4 bg-gray-50">
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
-        className="w-full max-w-md glass-morphism rounded-xl p-8"
+        // Terapkan custom shadow baru di sini
+        className="w-full max-w-sm bg-white rounded-xl p-8 shadow-strong-diffuse"
       >
-        <h1 className="text-3xl font-bold text-center mb-8">Haw Reload</h1>
-        <form onSubmit={handleLogin} className="space-y-6">
+        <h1 className="text-3xl font-bold text-center mb-8 text-gray-800">
+          Haw Reload
+        </h1>
+        <form onSubmit={handleLogin} className="space-y-8">
           <div>
-            <label className="block text-sm font-medium mb-2">Username</label>
+            <label className="block text-sm font-semibold text-gray-600 mb-1">
+              Username
+            </label>
             <input
               type="text"
               value={username}
               onChange={(e) => setUsername(e.target.value)}
-              className="w-full p-2 rounded-md border border-gray-300"
+              className="w-full px-1 py-2 bg-transparent border-b-2 border-gray-300 focus:outline-none focus:border-cyan-500 transition-colors"
               required
               disabled={isLoading}
             />
           </div>
           <div>
-            <label className="block text-sm font-medium mb-2">Password</label>
+            <label className="block text-sm font-semibold text-gray-600 mb-1">
+              Password
+            </label>
             <input
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="w-full p-2 rounded-md border border-gray-300"
+              className="w-full px-1 py-2 bg-transparent border-b-2 border-gray-300 focus:outline-none focus:border-cyan-500 transition-colors"
               required
               disabled={isLoading}
             />
           </div>
-          <Button type="submit" className="w-full" disabled={isLoading}>
+          
+          {/* Terapkan gaya tombol baru di sini */}
+          <Button 
+            type="submit" 
+            className="w-full bg-cyan-400 text-white font-bold hover:bg-cyan-500 shadow-md rounded-lg border-b-4 border-cyan-600 active:border-b-2" 
+            disabled={isLoading}
+          >
             {isLoading ? "Memproses..." : "Login"}
           </Button>
         </form>

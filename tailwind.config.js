@@ -16,6 +16,7 @@ module.exports = {
       },
     },
     extend: {
+      // (blok colors, borderRadius, keyframes, dan animation Anda tetap di sini)
       colors: {
         border: "hsl(var(--border))",
         input: "hsl(var(--input))",
@@ -56,6 +57,11 @@ module.exports = {
         md: "calc(var(--radius) - 2px)",
         sm: "calc(var(--radius) - 4px)",
       },
+      // --- TAMBAHKAN BLOK INI ---
+      boxShadow: {
+        'strong-diffuse': '0 10px 15px -3px rgb(0 0 0 / 0.07), 0 4px 6px -4px rgb(0 0 0 / 0.1)',
+      },
+      // --------------------------
       keyframes: {
         "accordion-down": {
           from: { height: 0 },

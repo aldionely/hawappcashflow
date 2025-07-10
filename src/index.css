@@ -1,3 +1,6 @@
+/* 1. Tambahkan baris ini di paling atas */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -54,6 +57,8 @@
     @apply border-border;
   }
   body {
+    /* 2. Tambahkan font-family di sini */
+    font-family: 'Inter', sans-serif;
     @apply bg-background text-foreground;
   }
 }
