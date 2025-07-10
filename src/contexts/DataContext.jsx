@@ -2,17 +2,23 @@ import React, { createContext, useContext, useState, useEffect, useCallback, use
 import { supabase } from "@/lib/supabaseClient";
 import { handleSupabaseError } from "@/lib/errorHandler";
 
-// API Service Functions (diletakkan di sini untuk kesederhanaan)
-const fetchFinancialsAPI = async () => {
-  const { data, error } = await supabase.from('daily_financials').select('*').order('shift_date', { ascending: false });
-  if (error) return { success: false, error: handleSupabaseError(error, "fetching financials") };
+// API Service Functions
+const fetchTransactionsAPI = async () => {
+  const { data, error } = await supabase.from('transactions').select('*').order('created_at', { ascending: false });
+  if (error) return { success: false, error: handleSupabaseError(error, "fetching transactions") };
   return { success: true, data: data || [] };
 };
 
-const addFinancialRecordAPI = async (recordData) => {
-  const { data, error } = await supabase.from('daily_financials').insert([recordData]).select();
-  if (error) return { success: false, error: handleSupabaseError(error, "adding financial record") };
-  return { success: true, data: data ? data[0] : null };
+const addTransactionsAPI = async (transactionArray) => {
+  const { data, error } = await supabase.from('transactions').insert(transactionArray).select();
+  if (error) return { success: false, error: handleSupabaseError(error, "adding transactions") };
+  return { success: true, data: data || [] };
+};
+
+const deleteTransactionGroupAPI = async (groupId) => {
+  const { error } = await supabase.from('transactions').delete().eq('group_id', groupId);
+  if (error) return { success: false, error: handleSupabaseError(error, "deleting transaction group") };
+  return { success: true };
 };
 
 
@@ -21,15 +27,15 @@ const DataContext = createContext(null);
 
 // Create Provider Component
 export const DataProvider = ({ children }) => {
-    const [financials, setFinancials] = useState([]);
+    const [transactions, setTransactions] = useState([]);
     const [loading, setLoading] = useState(true);
 
-    const fetchFinancials = useCallback(async () => {
+    const fetchTransactions = useCallback(async () => {
         setLoading(true);
         try {
-            const result = await fetchFinancialsAPI();
+            const result = await fetchTransactionsAPI();
             if (result.success) {
-                setFinancials(result.data || []);
+                setTransactions(result.data || []);
             }
         } catch (e) {
             console.error(e);
@@ -38,25 +44,34 @@ export const DataProvider = ({ children }) => {
         }
     }, []);
 
-    const addFinancialRecord = async (data) => {
-        const result = await addFinancialRecordAPI(data);
+    const addTransactions = async (data) => {
+        const result = await addTransactionsAPI(data);
         if (result.success) {
-            await fetchFinancials(); 
+            await fetchTransactions(); 
         }
         return result;
     };
 
-    // Panggil fetchFinancials saat komponen pertama kali dimuat
+    const deleteTransactionGroup = async (groupId) => {
+        const result = await deleteTransactionGroupAPI(groupId);
+        if (result.success) {
+            await fetchTransactions();
+        }
+        return result;
+    };
+
+
     useEffect(() => {
-        fetchFinancials();
-    }, [fetchFinancials]);
+        fetchTransactions();
+    }, [fetchTransactions]);
 
     const value = useMemo(() => ({
-        financials,
+        transactions,
         loading,
-        fetchFinancials,
-        addFinancialRecord
-    }), [financials, loading, fetchFinancials]);
+        fetchTransactions,
+        addTransactions,
+        deleteTransactionGroup,
+    }), [transactions, loading, fetchTransactions]);
 
     return (
         <DataContext.Provider value={value}>
@@ -65,7 +80,7 @@ export const DataProvider = ({ children }) => {
     );
 };
 
-// Custom Hook untuk menggunakan context
+// Custom Hook
 export const useData = () => {
     const context = useContext(DataContext);
     if (!context) {

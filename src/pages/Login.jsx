@@ -42,8 +42,7 @@ const Login = () => {
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
-        // Terapkan custom shadow baru di sini
-        className="w-full max-w-sm bg-white rounded-xl p-8 shadow-strong-diffuse"
+        className="w-full max-w-sm bg-white rounded-xl p-8 shadow-strong-pekat border-2 border-black"
       >
         <h1 className="text-3xl font-bold text-center mb-8 text-gray-800">
           Haw Reload
@@ -76,10 +75,10 @@ const Login = () => {
             />
           </div>
           
-          {/* Terapkan gaya tombol baru di sini */}
           <Button 
             type="submit" 
-            className="w-full bg-cyan-400 text-white font-bold hover:bg-cyan-500 shadow-md rounded-lg border-b-4 border-cyan-600 active:border-b-2" 
+            className="w-full bg-cyan-400 text-white font-bold hover:bg-cyan-500 rounded-lg border-2 border-black active:shadow-none"
+            style={{ boxShadow: '5px 5px 0px 0px rgba(0,0,0,1)' }}
             disabled={isLoading}
           >
             {isLoading ? "Memproses..." : "Login"}
