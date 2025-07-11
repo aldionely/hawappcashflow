@@ -3,22 +3,28 @@ import { supabase } from "@/lib/supabaseClient";
 import { handleSupabaseError } from "@/lib/errorHandler";
 
 // API Service Functions
-const fetchTransactionsAPI = async () => {
-  const { data, error } = await supabase.from('transactions').select('*').order('created_at', { ascending: false });
-  if (error) return { success: false, error: handleSupabaseError(error, "fetching transactions") };
-  return { success: true, data: data || [] };
+const fetchFromTableAPI = async (tableName) => {
+    const { data, error } = await supabase.from(tableName).select('*').order('created_at', { ascending: false });
+    if (error) return { success: false, error: handleSupabaseError(error, `fetching ${tableName}`) };
+    return { success: true, data: data || [] };
 };
 
-const addTransactionsAPI = async (transactionArray) => {
-  const { data, error } = await supabase.from('transactions').insert(transactionArray).select();
-  if (error) return { success: false, error: handleSupabaseError(error, "adding transactions") };
-  return { success: true, data: data || [] };
+const addRecordAPI = async (tableName, recordData) => {
+    const { data, error } = await supabase.from(tableName).insert([recordData]).select();
+    if (error) return { success: false, error: handleSupabaseError(error, `adding to ${tableName}`) };
+    return { success: true, data: data ? data[0] : null };
 };
 
-const deleteTransactionGroupAPI = async (groupId) => {
-  const { error } = await supabase.from('transactions').delete().eq('group_id', groupId);
-  if (error) return { success: false, error: handleSupabaseError(error, "deleting transaction group") };
-  return { success: true };
+const addMultipleRecordsAPI = async (tableName, records) => {
+    const { data, error } = await supabase.from(tableName).insert(records).select();
+    if (error) return { success: false, error: handleSupabaseError(error, `adding multiple to ${tableName}`) };
+    return { success: true, data: data || [] };
+};
+
+const deleteRecordAPI = async (tableName, condition) => {
+    const { error } = await supabase.from(tableName).delete().match(condition);
+    if (error) return { success: false, error: handleSupabaseError(error, `deleting from ${tableName}`) };
+    return { success: true };
 };
 
 
@@ -28,15 +34,21 @@ const DataContext = createContext(null);
 // Create Provider Component
 export const DataProvider = ({ children }) => {
     const [transactions, setTransactions] = useState([]);
+    const [shifts, setShifts] = useState([]);
+    const [shiftActivities, setShiftActivities] = useState([]);
     const [loading, setLoading] = useState(true);
 
-    const fetchTransactions = useCallback(async () => {
+    const fetchAllData = useCallback(async () => {
         setLoading(true);
         try {
-            const result = await fetchTransactionsAPI();
-            if (result.success) {
-                setTransactions(result.data || []);
-            }
+            const [transactionsResult, shiftsResult, activitiesResult] = await Promise.all([
+                fetchFromTableAPI('transactions'),
+                fetchFromTableAPI('shifts'),
+                fetchFromTableAPI('shift_activities')
+            ]);
+            if (transactionsResult.success) setTransactions(transactionsResult.data || []);
+            if (shiftsResult.success) setShifts(shiftsResult.data || []);
+            if (activitiesResult.success) setShiftActivities(activitiesResult.data || []);
         } catch (e) {
             console.error(e);
         } finally {
@@ -45,33 +57,43 @@ export const DataProvider = ({ children }) => {
     }, []);
 
     const addTransactions = async (data) => {
-        const result = await addTransactionsAPI(data);
-        if (result.success) {
-            await fetchTransactions(); 
-        }
+        const result = await addMultipleRecordsAPI('transactions', data);
+        if (result.success) await fetchAllData(); 
         return result;
     };
 
     const deleteTransactionGroup = async (groupId) => {
-        const result = await deleteTransactionGroupAPI(groupId);
-        if (result.success) {
-            await fetchTransactions();
-        }
+        const result = await deleteRecordAPI('transactions', { group_id: groupId });
+        if (result.success) await fetchAllData();
         return result;
     };
 
+    const addShift = async (data) => {
+        const result = await addRecordAPI('shifts', data);
+        if (result.success) await fetchAllData();
+        return result;
+    };
+
+    const addShiftActivity = async (data) => {
+        const result = await addRecordAPI('shift_activities', data);
+        if (result.success) await fetchAllData();
+        return result;
+    }
 
     useEffect(() => {
-        fetchTransactions();
-    }, [fetchTransactions]);
+        fetchAllData();
+    }, [fetchAllData]);
 
     const value = useMemo(() => ({
         transactions,
+        shifts,
+        shiftActivities,
         loading,
-        fetchTransactions,
         addTransactions,
         deleteTransactionGroup,
-    }), [transactions, loading, fetchTransactions]);
+        addShift,
+        addShiftActivity
+    }), [transactions, shifts, shiftActivities, loading]);
 
     return (
         <DataContext.Provider value={value}>
