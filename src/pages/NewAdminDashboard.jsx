@@ -1,108 +1,143 @@
-import React, { useState, useMemo, Fragment, useRef } from 'react';
+import React, { useState, useMemo, Fragment, useRef, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useData } from '@/contexts/DataContext';
 import { Button } from '@/components/ui/button';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
-import { useToast } from "@/components/ui/use-toast";
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
+import { useToast } from '@/components/ui/use-toast';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { formatNumberInput, parseFormattedNumber, formatDateTime } from '@/lib/utils';
-import { PlusCircle, Trash2, ArrowDownCircle, DollarSign, ChevronDown, LogOut, Download, Briefcase } from 'lucide-react';
+import { PlusCircle, Trash2, ArrowDownCircle, DollarSign, ChevronDown, LogOut, Download, Briefcase, Edit } from 'lucide-react';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
 
-// Komponen PDF untuk Keuangan Umum
-const KeuanganUmumReport = ({ transactions, stats, filterInfo }) => (
+// Komponen PDF untuk Keuangan Umum (Disederhanakan)
+const KeuanganUmumPDFReport = ({ groupedTransactions, stats, filterInfo }) => (
     <div className="p-8 bg-white" style={{ width: '800px' }}>
-      <div className="flex justify-between items-center mb-8 pb-4 border-b">
+        <div className="text-center mb-8">
+            <h1 className="text-3xl font-bold">Laporan Keuangan</h1>
+            <p className="text-gray-500">{filterInfo}</p>
+        </div>
+        <div className="mb-8">
+            <h2 className="text-xl font-semibold mb-4">Ringkasan Statistik</h2>
+            <div className="grid grid-cols-3 gap-4 text-sm">
+                <div className="bg-green-100 p-4 rounded-lg"><p className="text-muted-foreground">Total Pemasukan</p><p className="font-bold text-lg text-green-700">Rp {stats.totalUangMasuk.toLocaleString('id-ID')}</p></div>
+                <div className="bg-red-100 p-4 rounded-lg"><p className="text-muted-foreground">Total Pengeluaran</p><p className="font-bold text-lg text-red-700">- Rp {Math.abs(stats.totalUangKeluar).toLocaleString('id-ID')}</p></div>
+                <div className="bg-blue-100 p-4 rounded-lg"><p className="text-muted-foreground">Total Akhir</p><p className="font-bold text-lg text-blue-700">Rp {stats.totalSemua.toLocaleString('id-ID')}</p></div>
+            </div>
+        </div>
         <div>
-            <h1 className="text-3xl font-bold">Laporan Keuangan Umum</h1>
-            <p className="text-muted-foreground">{filterInfo}</p>
+            <h2 className="text-xl font-semibold mb-4">Rincian</h2>
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b">
+                  <th className="text-left p-2">Tanggal</th>
+                  <th className="text-left p-2">Keterangan</th>
+                  <th className="text-right p-2">Jumlah</th>
+                </tr>
+              </thead>
+              <tbody>
+                {groupedTransactions.map(group => {
+                  const { date } = formatDateTime(group.created_at);
+                  const isExpense = group.total < 0;
+                  const groupTitle = isExpense ? (group.item_taken || "Uang Keluar") : `${group.lokasi || 'Tanpa Lokasi'} - ${group.shift_name || 'Tanpa Shift'}`;
+                  return (
+                    <tr key={group.group_id} className="border-b">
+                      <td className="p-2">{date}</td>
+                      <td className="p-2">{groupTitle}</td>
+                      <td className={`p-2 text-right font-semibold ${isExpense ? 'text-red-600' : 'text-green-600'}`}>
+                        {isExpense ? '-' : '+'} Rp {Math.abs(group.total).toLocaleString('id-ID')}
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
         </div>
-      </div>
-      <div className="mb-8">
-        <h2 className="text-xl font-semibold mb-4">Ringkasan Statistik</h2>
-        <div className="grid grid-cols-3 gap-4 text-sm">
-            <div className="bg-gray-100 p-4 rounded-lg"><p className="text-muted-foreground">Total Pemasukan</p><p className="font-bold text-lg text-green-600">Rp {stats.totalUangMasuk.toLocaleString('id-ID')}</p></div>
-            <div className="bg-gray-100 p-4 rounded-lg"><p className="text-muted-foreground">Total Pengeluaran</p><p className="font-bold text-lg text-red-600">- Rp {Math.abs(stats.totalUangKeluar).toLocaleString('id-ID')}</p></div>
-            <div className="bg-blue-100 p-4 rounded-lg"><p className="text-muted-foreground">Saldo Akhir</p><p className="font-bold text-lg text-blue-700">Rp {stats.totalSemua.toLocaleString('id-ID')}</p></div>
-        </div>
-      </div>
-      <div>
-        <h2 className="text-xl font-semibold mb-4">Rincian Aktivitas</h2>
-        <table className="w-full text-sm">
-          <thead><tr className="border-b"><th className="text-left p-2">Tanggal</th><th className="text-left p-2">Aktivitas</th><th className="text-left p-2">Kategori</th><th className="text-right p-2">Jumlah</th></tr></thead>
-          <tbody>
-            {transactions.map(t => (
-              <tr key={t.id} className="border-b">
-                <td className="p-2">{formatDateTime(t.created_at).date}</td>
-                <td className="p-2">{t.item_taken || `${t.shift_name} - ${t.lokasi}`}</td>
-                <td className="p-2">{t.category}</td>
-                <td className={`p-2 text-right font-semibold ${t.amount >= 0 ? 'text-green-600' : 'text-red-600'}`}>Rp {t.amount.toLocaleString('id-ID')}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
     </div>
 );
 
-// Komponen PDF untuk Gaji Shift (Diperbarui)
-const GajiShiftReport = ({ salaryData, filterMonth }) => (
-    <div className="p-8 bg-white" style={{ width: '800px' }}>
-        <h1 className="text-3xl font-bold mb-2">Laporan Gaji Shift</h1>
-        <p className="text-muted-foreground mb-8">Periode: {filterMonth}</p>
-        {salaryData.map(data => (
-            <div key={data.id} className="mb-6 border-b pb-4">
-                <h3 className="text-xl font-semibold mb-2">{data.shift_name} - {data.lokasi}</h3>
-                <div className="grid grid-cols-4 gap-4 text-sm mb-2">
-                    <div><p className="text-muted-foreground">Uang Harian:</p><p className="font-bold">Rp {data.daily_wage.toLocaleString('id-ID')}</p></div>
-                    <div><p className="text-muted-foreground">Hari Kerja:</p><p className="font-bold">{data.hariKerja} hari</p></div>
-                    <div><p className="text-muted-foreground">Total Libur:</p><p className="font-bold">{data.totalLibur} hari</p></div>
-                    <div><p className="text-muted-foreground">Total Kasbon:</p><p className="font-bold">Rp {data.totalKasbon.toLocaleString('id-ID')}</p></div>
-                </div>
-                <div className="bg-gray-100 p-3 rounded-md flex justify-between items-center">
-                    <span className="font-bold">Total Gaji Diterima:</span>
-                    <span className="font-bold text-lg">Rp {data.gajiAkhir.toLocaleString('id-ID')}</span>
+
+const GajiShiftReport = ({ salaryData }) => (
+    <>
+      {salaryData.map((data) => (
+        <div key={data.id} className="p-6 border rounded-lg shadow-md salary-report-item bg-white" data-id={data.id} style={{ width: '780px', fontFamily: 'sans-serif' }}>
+            <h2 className="text-xl font-semibold text-gray-800 border-b pb-2 mb-4">{data.shift_name} - {data.lokasi}</h2>
+            <div className="mt-2 mb-4">
+                <h3 className="font-semibold text-gray-700 mb-2 text-sm">Rincian Gaji {data.shift_name}</h3>
+                <div className="text-xs space-y-2 text-gray-600 border p-3 rounded-md bg-gray-50">
+                    <div className="flex justify-between items-center">
+                        <span>Terhitung ({data.hariKerja} hari kerja × Rp {data.daily_wage.toLocaleString('id-ID')})</span>
+                        <span className="font-medium">Rp {(data.hariKerja * data.daily_wage).toLocaleString('id-ID')}</span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                        <span>Total Kasbon</span>
+                        <span className="font-medium text-red-600">- Rp {data.totalKasbon.toLocaleString('id-ID')}</span>
+                    </div>
+                    <div className="flex justify-between items-center border-t mt-2 pt-2">
+                        <span className="font-bold">Total Diterima</span>
+                        <span className="font-bold text-blue-700">Rp {data.gajiAkhir.toLocaleString('id-ID')}</span>
+                    </div>
                 </div>
             </div>
-        ))}
-    </div>
+            <div className="grid grid-cols-2 gap-6 pt-4 border-t mt-4">
+                <div>
+                    <h4 className="font-semibold text-gray-700 mb-2 text-sm">Rincian Kasbon</h4>
+                    {data.activities.filter(a => a.type === 'kasbon').length > 0 ? (
+                       <ul className="space-y-1 text-xs text-gray-600">
+                           {data.activities.filter(a => a.type === 'kasbon').map(a => (
+                               <li key={a.id} className="flex justify-between items-center p-1.5 bg-gray-50 rounded">
+                                   <span>{formatDateTime(a.activity_date).date}{a.notes ? ` (${a.notes})` : ''}</span>
+                                   <span className="font-semibold text-red-500">-Rp {a.amount.toLocaleString('id-ID')}</span>
+                               </li>
+                           ))}
+                       </ul>
+                    ) : <p className="text-xs text-gray-400">Tidak ada data.</p>}
+                </div>
+                <div>
+                    <h4 className="font-semibold text-gray-700 mb-2 text-sm">Rincian Libur ({data.totalLibur} hari)</h4>
+                    {data.activities.filter(a => a.type === 'libur').length > 0 ? (
+                        <ul className="space-y-1 text-xs text-gray-600">
+                            {data.activities.filter(a => a.type === 'libur').map(a => (
+                                <li key={a.id} className="flex items-center p-1.5 bg-gray-50 rounded">
+                                    {formatDateTime(a.activity_date).date}{a.notes ? ` (${a.notes})` : ''}
+                                </li>
+                            ))}
+                        </ul>
+                    ) : <p className="text-xs text-gray-400">Tidak ada data.</p>}
+                </div>
+            </div>
+        </div>
+      ))}
+    </>
 );
 
 
 const NewAdminDashboard = () => {
-    // ... State utama dan hooks
     const { logout } = useAuth();
-
     return (
         <div className="flex flex-col min-h-screen bg-gray-100">
           <header className="flex items-center justify-between p-4 bg-white shadow-md">
-            <h1 className="text-lg font-bold">Haw Reload</h1>
+            <h1 className="text-xl font-bold">Haw Reload</h1>
             <Button onClick={logout} variant="outline" size="sm">
                 <span className="hidden sm:inline">Logout</span>
                 <LogOut className="sm:hidden h-4 w-4"/>
             </Button>
           </header>
-          <main className="flex-1 p-2 sm:p-4 md:p-8">
-            <div className="w-full max-w-7xl mx-auto space-y-6">
+          <main className="flex-1 p-2 sm:p-4 md:p-6">
+            <div className="w-full max-w-7xl mx-auto space-y-4">
                 <Tabs defaultValue="keuangan-umum" className="w-full">
                     <TabsList className="grid w-full grid-cols-2">
-                        <TabsTrigger value="keuangan-umum">Keuangan Umum</TabsTrigger>
-                        <TabsTrigger value="gaji-shift">Gaji Shift</TabsTrigger>
+                        <TabsTrigger value="keuangan-umum" className="text-xs sm:text-sm">Catatan Uang</TabsTrigger>
+                        <TabsTrigger value="gaji-shift" className="text-xs sm:text-sm">Catatan Shift</TabsTrigger>
                     </TabsList>
-                    
-                    <TabsContent value="keuangan-umum" className="mt-4">
-                        <KeuanganUmumTab /> 
-                    </TabsContent>
-
-                    <TabsContent value="gaji-shift" className="mt-4">
-                        <GajiShiftTab />
-                    </TabsContent>
+                    <TabsContent value="keuangan-umum" className="mt-4"><KeuanganUmumTab /></TabsContent>
+                    <TabsContent value="gaji-shift" className="mt-4"><GajiShiftTab /></TabsContent>
                 </Tabs>
             </div>
           </main>
@@ -118,23 +153,12 @@ const KeuanganUmumTab = () => {
     const [expandedRowId, setExpandedRowId] = useState(null);
     const [formState, setFormState] = useState({});
     const [expenseFormState, setExpenseFormState] = useState({});
-    
     const [filterMode, setFilterMode] = useState('monthly');
     const [selectedDate, setSelectedDate] = useState(new Date().toISOString().slice(0, 10));
     const [selectedMonth, setSelectedMonth] = useState(new Date().toISOString().slice(0, 7));
-
     const reportRef = useRef();
     const [isDownloading, setIsDownloading] = useState(false);
-
-    const moneyCategories = {
-        'Ratusan': 'uang_ratusan',
-        'Puluhan': 'uang_puluhan',
-        '2 Ribuan': 'uang_2ribuan',
-        'Koin': 'uang_koin',
-        'Aksesoris': 'uang_aksesoris',
-        'On Mobile': 'uang_onmobile',
-    };
-    
+    const moneyCategories = {'Ratusan': 'uang_ratusan','Puluhan': 'uang_puluhan','2 Ribuan': 'uang_2ribuan','Koin': 'uang_koin','Aksesoris': 'uang_aksesoris','On Mobile': 'uang_onmobile',};
     const handleInputChange = (e, field) => setFormState(prev => ({ ...prev, [field]: formatNumberInput(e.target.value) }));
     const handleExpenseInputChange = (e, field) => setExpenseFormState(prev => ({...prev, [field]: field === 'amount' ? formatNumberInput(e.target.value) : e.target.value }));
     const resetForm = () => setFormState({});
@@ -215,13 +239,30 @@ const KeuanganUmumTab = () => {
         if (filteredTransactions.length === 0) return toast({ variant: "destructive", title: "Tidak ada data untuk diunduh." });
         setIsDownloading(true);
         const reportElement = reportRef.current;
-        const canvas = await html2canvas(reportElement, { scale: 2 });
+        const canvas = await html2canvas(reportElement, { scale: 2, useCORS: true });
+        
         const imgData = canvas.toDataURL('image/png');
         const pdf = new jsPDF('p', 'mm', 'a4');
         const pdfWidth = pdf.internal.pageSize.getWidth();
-        const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
-        pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
-        pdf.save(`laporan-umum-${filterMode}-${filterMode === 'daily' ? selectedDate : selectedMonth}.pdf`);
+        const pdfPageHeight = pdf.internal.pageSize.getHeight();
+        const canvasWidth = canvas.width;
+        const canvasHeight = canvas.height;
+        const totalPDFHeight = (canvasHeight * pdfWidth) / canvasWidth;
+
+        let heightLeft = totalPDFHeight;
+        let position = 0;
+
+        pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, totalPDFHeight);
+        heightLeft -= pdfPageHeight;
+
+        while (heightLeft > 0) {
+            position -= pdfPageHeight;
+            pdf.addPage();
+            pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, totalPDFHeight);
+            heightLeft -= pdfPageHeight;
+        }
+        
+        pdf.save(`laporan-umum-${filterMode === 'daily' ? selectedDate : selectedMonth}.pdf`);
         setIsDownloading(false);
     };
 
@@ -234,52 +275,94 @@ const KeuanganUmumTab = () => {
     const StatCard = ({ title, value, icon }) => ( <Card className="shadow-strong-pekat border-2 border-black"><CardHeader className="flex flex-row items-center justify-between space-y-0 p-3"><CardTitle className="text-xs font-medium">{title}</CardTitle>{icon}</CardHeader><CardContent className="p-3 pt-0"><div className="text-lg font-bold">Rp {Number(value).toLocaleString('id-ID')}</div></CardContent></Card> );
 
     return (
-        <div className="space-y-6">
-            <div style={{ position: 'absolute', left: '-9999px', zIndex: -1 }}><div ref={reportRef}><KeuanganUmumReport transactions={filteredTransactions} stats={stats} filterInfo={getFilterInfo()} /></div></div>
+        <div className="space-y-4">
+            <div style={{ position: 'absolute', left: '-9999px', zIndex: -1 }}>
+                <div ref={reportRef}>
+                    <KeuanganUmumPDFReport groupedTransactions={groupedTransactions} stats={stats} filterInfo={getFilterInfo()} />
+                </div>
+            </div>
             <section>
                 <Card className="shadow-strong-pekat border-2 border-black">
-                    <CardHeader className="flex-row items-center justify-between"><CardTitle className="text-base">Filter Data</CardTitle><Button onClick={handleDownloadPDF} disabled={isDownloading} size="sm" className="shadow-button-pekat border-black border-2 active:shadow-none"><Download className="mr-2 h-4 w-4"/>{isDownloading ? 'Mengunduh...' : 'Unduh Laporan'}</Button></CardHeader>
-                    <CardContent className="flex flex-col sm:flex-row gap-4 items-center"><div className="flex gap-2"><Button size="sm" variant={filterMode === 'monthly' ? 'default' : 'outline'} onClick={() => setFilterMode('monthly')}>Bulanan</Button><Button size="sm" variant={filterMode === 'daily' ? 'default' : 'outline'} onClick={() => setFilterMode('daily')}>Harian</Button><Button size="sm" variant={filterMode === 'all' ? 'default' : 'outline'} onClick={() => setFilterMode('all')}>Semua</Button></div><div className="flex-1 w-full">{filterMode === 'daily' && (<Input type="date" value={selectedDate} onChange={(e) => setSelectedDate(e.target.value)} />)}{filterMode === 'monthly' && (<Input type="month" value={selectedMonth} onChange={(e) => setSelectedMonth(e.target.value)} />)}</div></CardContent>
+                    <CardHeader className="flex-row items-center justify-between p-4"><CardTitle className="text-sm">Filter Data</CardTitle><Button onClick={handleDownloadPDF} disabled={isDownloading} size="sm" className="shadow-button-pekat border-black border-2 active:shadow-none text-xs"><Download className="mr-2 h-4 w-4"/>{isDownloading ? 'Mengunduh...' : 'Unduh'}</Button></CardHeader>
+                    <CardContent className="p-4 flex flex-col sm:flex-row gap-4 items-center"><div className="flex gap-2"><Button size="sm" variant={filterMode === 'monthly' ? 'default' : 'outline'} onClick={() => setFilterMode('monthly')}>Bulanan</Button><Button size="sm" variant={filterMode === 'daily' ? 'default' : 'outline'} onClick={() => setFilterMode('daily')}>Harian</Button><Button size="sm" variant={filterMode === 'all' ? 'default' : 'outline'} onClick={() => setFilterMode('all')}>Semua</Button></div><div className="flex-1 w-full">{filterMode === 'daily' && (<Input type="date" value={selectedDate} onChange={(e) => setSelectedDate(e.target.value)} />)}{filterMode === 'monthly' && (<Input type="month" value={selectedMonth} onChange={(e) => setSelectedMonth(e.target.value)} />)}</div></CardContent>
                 </Card>
             </section>
             
             <section>
-                <h2 className="text-xl font-bold mb-4">Rincian Uang</h2>
-                <div className="grid grid-cols-2 gap-4 md:grid-cols-3">
-                    <StatCard title="Total Saldo Saat Ini" value={stats.totalSemua} icon={<DollarSign className="h-4 w-4 text-muted-foreground" />}/>
+                <h2 className="text-lg font-bold mb-2">Rincian Uang</h2>
+                <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 md:gap-4">
+                    <StatCard title="Total Semua Uang" value={stats.totalSemua} icon={<DollarSign className="h-4 w-4 text-muted-foreground" />}/>
                     <StatCard title="Uang Keluar" value={Math.abs(stats.totalUangKeluar)} />
                     {Object.entries(moneyCategories).map(([category]) => ( <StatCard key={category} title={`Uang ${category}`} value={stats.kategori[category] || 0} /> ))}
                 </div>
                 <div className="mt-4 grid md:grid-cols-2 gap-4">
-                    <Card className="shadow-strong-pekat border-2 border-black"><CardHeader className="p-4"><CardTitle className="text-base">Total Saldo per Lokasi</CardTitle></CardHeader><CardContent className="p-4">{Object.keys(stats.totalPerLokasi).length > 0 ? ( <ul className="space-y-2 text-sm">{Object.entries(stats.totalPerLokasi).map(([lokasi, total]) => ( <li key={lokasi} className="flex justify-between"><span>{lokasi}</span><span className="font-semibold">Rp {Number(total).toLocaleString('id-ID')}</span></li> ))}</ul> ) : <p className="text-sm">Belum ada data lokasi.</p>}</CardContent></Card>
-                    <Card className="shadow-strong-pekat border-2 border-black"><CardHeader className="p-4"><CardTitle className="text-base">Uang Tercatat</CardTitle></CardHeader><CardContent className="p-4"><p className="text-2xl font-bold">Rp {stats.totalUangMasuk.toLocaleString('id-ID')}</p></CardContent></Card>
+                    <Card className="shadow-strong-pekat border-2 border-black"><CardHeader className="p-4"><CardTitle className="text-sm">Detail Lokasi</CardTitle></CardHeader><CardContent className="p-4">{Object.keys(stats.totalPerLokasi).length > 0 ? ( <ul className="space-y-2 text-xs">{Object.entries(stats.totalPerLokasi).map(([lokasi, total]) => ( <li key={lokasi} className="flex justify-between"><span>{lokasi}</span><span className="font-semibold">Rp {Number(total).toLocaleString('id-ID')}</span></li> ))}</ul> ) : <p className="text-xs">Belum ada data lokasi.</p>}</CardContent></Card>
+                    <Card className="shadow-strong-pekat border-2 border-black"><CardHeader className="p-4"><CardTitle className="text-sm">Uang Tercatat</CardTitle></CardHeader><CardContent className="p-4"><p className="text-xl font-bold">Rp {stats.totalUangMasuk.toLocaleString('id-ID')}</p></CardContent></Card>
                 </div>
             </section>
             
             <section>
-                <div className="flex flex-col sm:flex-row justify-between items-center mb-4 gap-2"><h2 className="text-xl font-bold">Aktivitas</h2><div className="flex gap-2 w-full sm:w-auto">
-                    <Dialog open={isFormOpen} onOpenChange={handleFormOpenChange}><DialogTrigger asChild><Button onClick={() => setIsFormOpen(true)} size="sm" className="w-full shadow-button-pekat border-2 border-black active:shadow-none text-xs"><PlusCircle className="mr-2 h-4 w-4"/> Tambah</Button></DialogTrigger><DialogContent className="flex flex-col max-h-[90vh]"><DialogHeader className="p-6 pb-2"><DialogTitle>Tambah Catatan Keuangan</DialogTitle></DialogHeader><div className="flex-1 overflow-y-auto p-6 space-y-4"><form id="financial-form" className="space-y-4" onSubmit={handleFormSubmit}><Input type="date" value={formState.shift_date || ''} onChange={(e) => setFormState(p => ({...p, shift_date: e.target.value}))} required/><Input placeholder="Nama Shift" value={formState.shift_name || ''} onChange={(e) => setFormState(p => ({...p, shift_name: e.target.value}))} /><Input placeholder="Lokasi" value={formState.lokasi || ''} onChange={(e) => setFormState(p => ({...p, lokasi: e.target.value}))} />{Object.entries(moneyCategories).map(([category, fieldName]) => ( <Input key={fieldName} placeholder={category} value={formState[fieldName] || ''} onChange={(e) => handleInputChange(e, fieldName)} /> ))}<Textarea placeholder="Keterangan" value={formState.keterangan || ''} onChange={(e) => setFormState(p => ({...p, keterangan: e.target.value}))} /></form></div><DialogFooter className="p-6 pt-4 border-t"><Button type="button" variant="outline" onClick={() => handleFormOpenChange(false)}>Batal</Button><Button type="submit" form="financial-form">Simpan</Button></DialogFooter></DialogContent></Dialog>
-                    <Dialog open={isExpenseFormOpen} onOpenChange={handleExpenseFormOpenChange}><DialogTrigger asChild><Button size="sm" variant="destructive" className="w-full shadow-button-pekat border-2 border-black active:shadow-none text-xs"><ArrowDownCircle className="mr-2 h-4 w-4" /> Keluar</Button></DialogTrigger><DialogContent className="flex flex-col max-h-[90vh]"><DialogHeader className="p-6 pb-2"><DialogTitle>Catat Pengeluaran</DialogTitle></DialogHeader><div className="flex-1 overflow-y-auto p-6 space-y-4"><form id="expense-form" className="space-y-4" onSubmit={handleExpenseFormSubmit}><select value={expenseFormState.category || ''} onChange={(e) => handleExpenseInputChange(e, 'category')} className="w-full h-10 rounded-md border border-input px-3 py-2 text-sm"><option value="" disabled>Pilih Kategori Uang</option>{Object.keys(moneyCategories).map(cat => <option key={cat} value={cat}>{cat}</option>)}<option value="Lainnya">Lainnya</option></select><Input placeholder="Jumlah" value={expenseFormState.amount || ''} onChange={(e) => handleExpenseInputChange(e, 'amount')} disabled={expenseFormState.ambil_semua}/><Input placeholder="Nama Pengambil" value={expenseFormState.person_name || ''} onChange={(e) => handleExpenseInputChange(e, 'person_name')} required/><Textarea placeholder="Keterangan" value={expenseFormState.notes || ''} onChange={(e) => handleExpenseInputChange(e, 'notes')} /><div className="flex items-center space-x-2"><input type="checkbox" id="ambil_semua" checked={!!expenseFormState.ambil_semua} onChange={(e) => setExpenseFormState(p => ({...p, ambil_semua: e.target.checked, category: ''}))} /><label htmlFor="ambil_semua" className="text-sm">Tarik semua uang dari semua kategori</label></div></form></div><DialogFooter className="p-6 pt-4 border-t"><Button type="button" variant="outline" onClick={() => handleExpenseFormOpenChange(false)}>Batal</Button><Button type="submit" form="expense-form">Simpan</Button></DialogFooter></DialogContent></Dialog>
+                <div className="flex flex-col sm:flex-row justify-between items-center mb-2 gap-2"><h2 className="text-lg font-bold">Aktivitas</h2><div className="flex gap-2 w-full sm:w-auto">
+                    <Dialog open={isFormOpen} onOpenChange={handleFormOpenChange}><DialogTrigger asChild><Button onClick={() => setIsFormOpen(true)} size="sm" className="w-full shadow-button-pekat border-2 border-black active:shadow-none text-xs"><PlusCircle className="mr-1 h-4 w-4"/> Tambah</Button></DialogTrigger><DialogContent className="flex flex-col max-h-[90vh]"><DialogHeader className="p-6 pb-2"><DialogTitle>Tambah Catatan Keuangan</DialogTitle></DialogHeader><div className="flex-1 overflow-y-auto p-6 space-y-4"><form id="financial-form" className="space-y-4" onSubmit={handleFormSubmit}><Input type="date" value={formState.shift_date || ''} onChange={(e) => setFormState(p => ({...p, shift_date: e.target.value}))} required/><Input placeholder="Nama Shift" value={formState.shift_name || ''} onChange={(e) => setFormState(p => ({...p, shift_name: e.target.value}))} /><Input placeholder="Lokasi" value={formState.lokasi || ''} onChange={(e) => setFormState(p => ({...p, lokasi: e.target.value}))} />{Object.entries(moneyCategories).map(([category, fieldName]) => ( <Input key={fieldName} placeholder={category} value={formState[fieldName] || ''} onChange={(e) => handleInputChange(e, fieldName)} /> ))}<Textarea placeholder="Keterangan" value={formState.keterangan || ''} onChange={(e) => setFormState(p => ({...p, keterangan: e.target.value}))} /></form></div><DialogFooter className="p-6 pt-4 border-t"><Button type="button" variant="outline" onClick={() => handleFormOpenChange(false)}>Batal</Button><Button type="submit" form="financial-form">Simpan</Button></DialogFooter></DialogContent></Dialog>
+                    <Dialog open={isExpenseFormOpen} onOpenChange={handleExpenseFormOpenChange}><DialogTrigger asChild><Button size="sm" variant="destructive" className="w-full shadow-button-pekat border-2 border-black active:shadow-none text-xs"><ArrowDownCircle className="mr-1 h-4 w-4" /> Keluar</Button></DialogTrigger><DialogContent className="flex flex-col max-h-[90vh]"><DialogHeader className="p-6 pb-2"><DialogTitle>Catat Pengeluaran</DialogTitle></DialogHeader><div className="flex-1 overflow-y-auto p-6 space-y-4"><form id="expense-form" className="space-y-4" onSubmit={handleExpenseFormSubmit}><select value={expenseFormState.category || ''} onChange={(e) => handleExpenseInputChange(e, 'category')} className="w-full h-10 rounded-md border border-input px-3 py-2 text-sm"><option value="" disabled>Pilih Kategori Uang</option>{Object.keys(moneyCategories).map(cat => <option key={cat} value={cat}>{cat}</option>)}<option value="Lainnya">Lainnya</option></select><Input placeholder="Jumlah" value={expenseFormState.amount || ''} onChange={(e) => handleExpenseInputChange(e, 'amount')} disabled={expenseFormState.ambil_semua}/><Input placeholder="Nama Pengambil" value={expenseFormState.person_name || ''} onChange={(e) => handleExpenseInputChange(e, 'person_name')} required/><Textarea placeholder="Keterangan" value={expenseFormState.notes || ''} onChange={(e) => handleExpenseInputChange(e, 'notes')} /><div className="flex items-center space-x-2"><input type="checkbox" id="ambil_semua" checked={!!expenseFormState.ambil_semua} onChange={(e) => setExpenseFormState(p => ({...p, ambil_semua: e.target.checked, category: ''}))} /><label htmlFor="ambil_semua" className="text-sm">Tarik semua uang dari semua kategori</label></div></form></div><DialogFooter className="p-6 pt-4 border-t"><Button type="button" variant="outline" onClick={() => handleExpenseFormOpenChange(false)}>Batal</Button><Button type="submit" form="expense-form">Simpan</Button></DialogFooter></DialogContent></Dialog>
                 </div></div>
-                <Card><div className="overflow-x-auto"><Table><TableHeader><TableRow><TableHead className="w-full">Info</TableHead><TableHead className="text-right">Aksi</TableHead></TableRow></TableHeader><TableBody>{loading ? ( <TableRow><TableCell colSpan="2" className="text-center">Memuat data...</TableCell></TableRow> ) : groupedTransactions.length > 0 ? ( groupedTransactions.map(group => { const { date, time } = formatDateTime(group.created_at); const isExpanded = expandedRowId === group.group_id; const isExpense = group.total < 0; const groupTitle = isExpense ? (group.item_taken || "Uang Keluar") : `${group.lokasi || 'Tanpa Lokasi'} - ${group.shift_name || 'Tanpa Shift'}`; return ( <Fragment key={group.group_id}><TableRow onClick={() => setExpandedRowId(isExpanded ? null : group.group_id)} className="cursor-pointer"><TableCell className="font-medium"><div className="flex justify-between items-center"><div className="flex flex-col"><span>{groupTitle}</span><span className="text-xs text-gray-500">{date} {time}</span><span className={`font-bold mt-1 ${isExpense ? 'text-red-600' : 'text-green-600'}`}>{isExpense ? '' : '+'} Rp {Math.abs(group.total).toLocaleString('id-ID')}</span></div><ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform ${isExpanded ? 'rotate-180' : ''}`} /></div></TableCell><TableCell className="text-right"><AlertDialog><AlertDialogTrigger asChild><Button variant="destructive" size="icon" className="h-8 w-8 shadow-button-pekat border-2 border-black active:shadow-none" onClick={(e) => e.stopPropagation()}><Trash2 className="h-4 w-4"/></Button></AlertDialogTrigger><AlertDialogContent><AlertDialogHeader><AlertDialogTitle>Apakah Anda yakin?</AlertDialogTitle><AlertDialogDescription>Tindakan ini akan menghapus semua entri dalam grup aktivitas ini.</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel>Batal</AlertDialogCancel><AlertDialogAction onClick={() => handleDeleteGroup(group.group_id)}>Hapus</AlertDialogAction></AlertDialogFooter></AlertDialogContent></AlertDialog></TableCell></TableRow>{isExpanded && ( <TableRow className="bg-white dark:bg-background"><TableCell colSpan={2} className="p-4">{isExpense ? ( <div className="space-y-2 text-sm"><div className="flex justify-between"><span className="text-muted-foreground">Diambil oleh:</span> <span className="font-semibold">{group.person_name || '-'}</span></div>{group.details.map(detail => ( <div key={detail.id} className="flex justify-between"><span className="text-muted-foreground">{detail.item_taken || `${detail.category}`}:</span><span className="font-semibold text-red-600">- Rp {Math.abs(detail.amount).toLocaleString('id-ID')}</span></div> ))}{group.notes && <div className="pt-2 border-t"><p className="text-xs font-semibold">Keterangan:</p><p className="text-sm text-muted-foreground">{group.notes}</p></div>}</div> ) : ( <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">{group.details.map(detail => ( <div key={detail.id} className="flex flex-col text-sm"><span className="text-muted-foreground text-xs">{detail.category}</span><div className="bg-muted rounded-md px-3 py-1 mt-1 font-semibold">Rp {(detail.amount || 0).toLocaleString('id-ID')}</div></div> ))}{group.notes && (<div className="mt-4 pt-2 border-t col-span-full"><p className="text-sm font-semibold">Keterangan:</p><p className="text-sm text-muted-foreground">{group.notes}</p></div>)}</div> )}</TableCell></TableRow> )}</Fragment> ); }) ) : ( <TableRow><TableCell colSpan="2" className="text-center">Belum ada aktivitas.</TableCell></TableRow> )}</TableBody></Table></div></Card>
+                <Card><div className="overflow-x-auto"><Table><TableHeader><TableRow><TableHead className="w-full text-sm">Info</TableHead><TableHead className="text-right text-sm">Opsi</TableHead></TableRow></TableHeader><TableBody>{loading ? ( <TableRow><TableCell colSpan="2" className="text-center">Memuat data...</TableCell></TableRow> ) : groupedTransactions.length > 0 ? ( groupedTransactions.map(group => { const { date, time } = formatDateTime(group.created_at); const isExpanded = expandedRowId === group.group_id; const isExpense = group.total < 0; const groupTitle = isExpense ? (group.item_taken || "Uang Keluar") : `${group.lokasi || 'Tanpa Lokasi'} - ${group.shift_name || 'Tanpa Shift'}`; return ( <Fragment key={group.group_id}><TableRow onClick={() => setExpandedRowId(isExpanded ? null : group.group_id)} className="cursor-pointer"><TableCell className="font-medium text-sm"><div className="flex justify-between items-center"><div className="flex flex-col"><span>{groupTitle}</span><span className="text-xs text-gray-500">{date} {time}</span><span className={`font-semibold mt-1 ${isExpense ? 'text-red-600' : 'text-green-600'}`}>{isExpense ? '' : '+'} Rp {Math.abs(group.total).toLocaleString('id-ID')}</span></div><ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform ${isExpanded ? 'rotate-180' : ''}`} /></div></TableCell><TableCell className="text-right"><AlertDialog><AlertDialogTrigger asChild><Button variant="destructive" size="icon" className="h-8 w-8 shadow-button-pekat border-2 border-black active:shadow-none" onClick={(e) => e.stopPropagation()}><Trash2 className="h-4 w-4"/></Button></AlertDialogTrigger><AlertDialogContent><AlertDialogHeader><AlertDialogTitle>Apakah Anda yakin?</AlertDialogTitle><AlertDialogDescription>Tindakan ini akan menghapus semua entri dalam grup aktivitas ini.</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel>Batal</AlertDialogCancel><AlertDialogAction onClick={() => handleDeleteGroup(group.group_id)}>Hapus</AlertDialogAction></AlertDialogFooter></AlertDialogContent></AlertDialog></TableCell></TableRow>{isExpanded && ( <TableRow className="bg-white dark:bg-background"><TableCell colSpan={2} className="p-4">{isExpense ? ( <div className="space-y-2 text-xs"><div className="flex justify-between"><span className="text-muted-foreground">Diambil oleh:</span> <span className="font-semibold">{group.person_name || '-'}</span></div>{group.details.map(detail => ( <div key={detail.id} className="flex justify-between"><span className="text-muted-foreground">{detail.item_taken || `${detail.category}`}:</span><span className="font-semibold text-red-600">- Rp {Math.abs(detail.amount).toLocaleString('id-ID')}</span></div> ))}{group.notes && <div className="pt-2 border-t"><p className="text-xs font-semibold">Keterangan:</p><p className="text-xs text-muted-foreground">{group.notes}</p></div>}</div> ) : ( <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">{group.details.map(detail => ( <div key={detail.id} className="flex flex-col text-xs"><span className="text-muted-foreground text-xs">{detail.category}</span><div className="bg-muted rounded-md px-3 py-1 mt-1 font-semibold">Rp {(detail.amount || 0).toLocaleString('id-ID')}</div></div> ))}{group.notes && (<div className="mt-4 pt-2 border-t col-span-full"><p className="text-xs font-semibold">Keterangan:</p><p className="text-xs text-muted-foreground">{group.notes}</p></div>)}</div> )}</TableCell></TableRow> )}</Fragment> ); }) ) : ( <TableRow><TableCell colSpan="2" className="text-center text-sm">Belum ada aktivitas.</TableCell></TableRow> )}</TableBody></Table></div></Card>
             </section>
         </div>
     );
 };
 
 const GajiShiftTab = () => {
-    const { shifts, shiftActivities, addShift, addShiftActivity, loading } = useData();
+    const { shifts, shiftActivities, addShift, updateShift, deleteShift, addShiftActivity, updateShiftActivity, deleteShiftActivity, loading } = useData();
     const { toast } = useToast();
+    
     const [isShiftFormOpen, setIsShiftFormOpen] = useState(false);
-    const [isKasbonFormOpen, setIsKasbonFormOpen] = useState(false);
-    const [isLiburFormOpen, setIsLiburFormOpen] = useState(false);
-    const [selectedShift, setSelectedShift] = useState(null);
     const [shiftForm, setShiftForm] = useState({});
-    const [kasbonForm, setKasbonForm] = useState({});
-    const [liburForm, setLiburForm] = useState({});
+    const [editingShift, setEditingShift] = useState(null);
+    const [isActivityFormOpen, setIsActivityFormOpen] = useState(false);
+    const [activityForm, setActivityForm] = useState({ type: 'kasbon', activity_date: new Date().toISOString().slice(0, 10) });
+    const [editingActivity, setEditingActivity] = useState(null);
     const [filterMonth, setFilterMonth] = useState(new Date().toISOString().slice(0, 7));
+    const [expandedShiftId, setExpandedShiftId] = useState(null);
     const reportRef = useRef();
     const [isDownloading, setIsDownloading] = useState(false);
+
+    const primaryButtonStyles = "shadow-button-pekat border-black border-2 active:shadow-none text-xs sm:text-sm";
+    
+    const handleShiftFormOpen = (shift = null) => {
+        setEditingShift(shift);
+        if (shift) {
+            setShiftForm({ ...shift, daily_wage: formatNumberInput(String(shift.daily_wage)) });
+        } else {
+            setShiftForm({});
+        }
+        setIsShiftFormOpen(true);
+    };
+
+    const handleShiftFormClose = () => {
+        setIsShiftFormOpen(false);
+        setEditingShift(null);
+        setShiftForm({});
+    };
+
+    const handleActivityFormOpen = (type, activity = null) => {
+        const initialFormState = {
+            type,
+            activity_date: activity ? activity.activity_date : new Date().toISOString().slice(0, 10),
+            notes: activity ? activity.notes : '',
+            amount: activity && activity.amount ? formatNumberInput(String(activity.amount)) : '',
+            shift_id: activity ? activity.shift_id : ''
+        };
+        setEditingActivity(activity);
+        setActivityForm(initialFormState);
+        setIsActivityFormOpen(true);
+    };
+    
+    const handleActivityFormClose = () => {
+        setIsActivityFormOpen(false);
+        setEditingActivity(null);
+        setActivityForm({ type: 'kasbon', activity_date: new Date().toISOString().slice(0, 10) });
+    };
 
     const handleShiftSubmit = async (e) => {
         e.preventDefault();
@@ -288,33 +371,44 @@ const GajiShiftTab = () => {
             lokasi: shiftForm.lokasi,
             daily_wage: parseInt(parseFormattedNumber(shiftForm.daily_wage || '0'), 10) 
         };
-        const result = await addShift(data);
+        const result = editingShift ? await updateShift(editingShift.id, data) : await addShift(data);
         if (result.success) {
-            toast({ title: "Sukses", description: "Shift berhasil ditambahkan." });
-            setIsShiftFormOpen(false);
-            setShiftForm({});
+            toast({ title: "Sukses", description: `Shift berhasil di${editingShift ? 'perbarui' : 'tambahkan'}.` });
+            handleShiftFormClose();
         } else {
             toast({ variant: "destructive", title: "Gagal", description: result.error.message });
         }
     };
+
+    const handleDeleteShiftConfirm = async (id) => {
+        await deleteShift(id);
+        toast({ title: "Sukses", description: "Shift berhasil dihapus." });
+    };
     
-    const handleActivitySubmit = async (type) => {
-        const form = type === 'kasbon' ? kasbonForm : liburForm;
+    const handleActivitySubmit = async (e) => {
+        e.preventDefault();
+        if(!activityForm.shift_id && !editingActivity) {
+            return toast({ variant: "destructive", title: "Gagal", description: "Silakan pilih shift terlebih dahulu." });
+        }
         const data = {
-            shift_id: selectedShift.id,
-            activity_date: form.activity_date || new Date().toISOString().slice(0, 10),
-            type: type,
-            amount: type === 'kasbon' ? parseInt(parseFormattedNumber(form.amount || '0'), 10) : null,
-            notes: form.notes,
+            shift_id: editingActivity ? editingActivity.shift_id : activityForm.shift_id,
+            activity_date: activityForm.activity_date,
+            type: activityForm.type,
+            amount: activityForm.type === 'kasbon' ? parseInt(parseFormattedNumber(activityForm.amount || '0'), 10) : null,
+            notes: activityForm.notes,
         };
-        const result = await addShiftActivity(data);
+        const result = editingActivity?.id ? await updateShiftActivity(editingActivity.id, data) : await addShiftActivity(data);
         if(result.success){
-            toast({title: "Sukses", description: `Aktivitas ${type} berhasil dicatat.`});
-            if (type === 'kasbon') setIsKasbonFormOpen(false); else setIsLiburFormOpen(false);
-            setKasbonForm({}); setLiburForm({});
+            toast({title: "Sukses", description: `Aktivitas berhasil di${editingActivity?.id ? 'perbarui' : 'catat'}.`});
+            handleActivityFormClose();
         } else {
             toast({ variant: "destructive", title: "Gagal", description: result.error.message });
         }
+    }
+
+    const handleDeleteActivityConfirm = async (id) => {
+        await deleteShiftActivity(id);
+        toast({ title: "Sukses", description: "Aktivitas berhasil dihapus." });
     }
     
     const salaryData = useMemo(() => {
@@ -322,75 +416,182 @@ const GajiShiftTab = () => {
         const today = new Date();
         const currentYear = today.getFullYear();
         const currentMonth = today.getMonth() + 1;
-
         let daysInPeriod;
         if (year === currentYear && month === currentMonth) {
             daysInPeriod = today.getDate();
         } else {
             daysInPeriod = new Date(year, month, 0).getDate();
         }
-
         return shifts.map(s => {
-            const activities = shiftActivities.filter(act => act.shift_id === s.id && act.activity_date.startsWith(filterMonth));
+            const activities = shiftActivities.filter(act => act.shift_id === s.id && act.activity_date.startsWith(filterMonth)).sort((a,b) => new Date(a.activity_date) - new Date(b.activity_date));
             const totalKasbon = activities.filter(a => a.type === 'kasbon').reduce((sum, a) => sum + (a.amount || 0), 0);
             const totalLibur = activities.filter(a => a.type === 'libur').length;
             const hariKerja = daysInPeriod - totalLibur;
             const gajiAkhir = (s.daily_wage * hariKerja) - totalKasbon;
-            return { ...s, hariKerja, totalKasbon, totalLibur, gajiAkhir };
+            return { ...s, hariKerja, totalKasbon, totalLibur, gajiAkhir, activities };
         }).sort((a, b) => a.shift_name.localeCompare(b.shift_name) || a.lokasi.localeCompare(b.lokasi));
     }, [shifts, shiftActivities, filterMonth]);
 
     const handleDownloadGajiPDF = async () => {
-        if(salaryData.length === 0) return toast({variant: "destructive", title: "Tidak ada data untuk diunduh."});
+        if (salaryData.length === 0) {
+            return toast({ variant: "destructive", title: "Tidak ada data untuk diunduh." });
+        }
         setIsDownloading(true);
-        const reportElement = reportRef.current;
-        const canvas = await html2canvas(reportElement, {scale: 2});
-        const imgData = canvas.toDataURL('image/png');
+    
         const pdf = new jsPDF('p', 'mm', 'a4');
-        const pdfWidth = pdf.internal.pageSize.getWidth();
-        const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
-        pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
+        const reportContainer = reportRef.current;
+    
+        for (let i = 0; i < salaryData.length; i++) {
+            const shiftData = salaryData[i];
+            const element = reportContainer.querySelector(`.salary-report-item[data-id="${shiftData.id}"]`);
+            
+            if (element) {
+                if (i > 0) {
+                    pdf.addPage();
+                }
+    
+                const canvas = await html2canvas(element, { scale: 2, useCORS: true });
+                const imgData = canvas.toDataURL('image/png');
+                
+                const pdfWidth = pdf.internal.pageSize.getWidth();
+                const imgHeight = (canvas.height * pdfWidth) / canvas.width;
+    
+                pdf.addImage(imgData, 'PNG', 10, 10, pdfWidth - 20, imgHeight);
+            }
+        }
+        
         pdf.save(`laporan-gaji-${filterMonth}.pdf`);
         setIsDownloading(false);
     };
+    
 
     return (
-        <div className="space-y-6">
-            <div style={{ position: 'absolute', left: '-9999px', zIndex: -1 }}><div ref={reportRef}><GajiShiftReport salaryData={salaryData} filterMonth={filterMonth} /></div></div>
+        <div className="space-y-4">
+            <div style={{ position: 'absolute', left: '-9999px', zIndex: -1 }}>
+                <div ref={reportRef}>
+                    {/* Komponen GajiShiftReport tidak perlu judul utama di sini lagi */}
+                    <GajiShiftReport salaryData={salaryData} filterMonth={filterMonth} />
+                </div>
+            </div>
             <Card className="shadow-strong-pekat border-2 border-black">
-                <CardHeader className="flex-row items-center justify-between"><CardTitle className="text-base">Filter Laporan Gaji</CardTitle><Button onClick={handleDownloadGajiPDF} disabled={isDownloading} size="sm" className="shadow-button-pekat border-black border-2 active:shadow-none"><Download className="mr-2 h-4 w-4"/>{isDownloading ? 'Mengunduh...' : 'Unduh Laporan'}</Button></CardHeader>
-                <CardContent>
+                <CardHeader className="flex-row items-center justify-between p-4"><CardTitle className="text-sm">Filter Laporan Gaji</CardTitle><Button onClick={handleDownloadGajiPDF} disabled={isDownloading} size="sm" className={primaryButtonStyles}><Download className="mr-2 h-4 w-4"/>{isDownloading ? 'Mengunduh...' : 'Unduh'}</Button></CardHeader>
+                <CardContent className="p-4">
                     <Input type="month" value={filterMonth} onChange={(e) => setFilterMonth(e.target.value)} className="max-w-xs"/>
                 </CardContent>
             </Card>
 
-            <div className="text-right">
-                <Dialog open={isShiftFormOpen} onOpenChange={setIsShiftFormOpen}><DialogTrigger asChild><Button><Briefcase className="mr-2 h-4 w-4"/> Tambah Shift</Button></DialogTrigger><DialogContent><DialogHeader><DialogTitle>Tambah Shift Baru</DialogTitle></DialogHeader><form onSubmit={handleShiftSubmit} className="space-y-4 pt-4"><Input placeholder="Nama Shift" value={shiftForm.shift_name || ''} onChange={(e) => setShiftForm(p => ({...p, shift_name: e.target.value}))} required/><Input placeholder="Lokasi" value={shiftForm.lokasi || ''} onChange={(e) => setShiftForm(p => ({...p, lokasi: e.target.value}))} required/><Input placeholder="Uang Harian" value={shiftForm.daily_wage || ''} onChange={(e) => setShiftForm(p => ({...p, daily_wage: formatNumberInput(e.target.value)}))} required/><DialogFooter><Button type="submit">Simpan</Button></DialogFooter></form></DialogContent></Dialog>
+            <div className="flex flex-wrap gap-2 justify-end">
+                <Button className={primaryButtonStyles} onClick={() => handleActivityFormOpen('kasbon')}>+ Kasbon</Button>
+                <Button className={primaryButtonStyles} onClick={() => handleActivityFormOpen('libur')}>+ Libur</Button>
+                <Button className={primaryButtonStyles} onClick={() => handleShiftFormOpen()}><Briefcase className="mr-1 h-4 w-4"/> Tambah Shift</Button>
             </div>
             
             <Card>
-                <Table>
-                    <TableHeader><TableRow><TableHead>Shift</TableHead><TableHead>Uang Harian</TableHead><TableHead>Hari Kerja (Libur)</TableHead><TableHead>Total Kasbon</TableHead><TableHead>Total Gaji</TableHead><TableHead className="text-right">Aksi</TableHead></TableRow></TableHeader>
-                    <TableBody>
-                        {loading ? <TableRow><TableCell colSpan="6" className="text-center">Memuat...</TableCell></TableRow> : salaryData.map(data => (
-                            <TableRow key={data.id}>
-                                <TableCell className="font-semibold">{data.shift_name} - {data.lokasi}</TableCell>
-                                <TableCell>Rp {data.daily_wage.toLocaleString('id-ID')}</TableCell>
-                                <TableCell>{data.hariKerja} ({data.totalLibur} libur)</TableCell>
-                                <TableCell>Rp {data.totalKasbon.toLocaleString('id-ID')}</TableCell>
-                                <TableCell className="font-bold">Rp {data.gajiAkhir.toLocaleString('id-ID')}</TableCell>
-                                <TableCell className="text-right">
-                                    <Button size="sm" onClick={() => { setSelectedShift(data); setIsKasbonFormOpen(true); }}>Kasbon</Button>
-                                    <Button size="sm" variant="outline" className="ml-2" onClick={() => { setSelectedShift(data); setIsLiburFormOpen(true); }}>Libur</Button>
-                                </TableCell>
-                            </TableRow>
-                        ))}
-                    </TableBody>
-                </Table>
+                <div className="overflow-x-auto">
+                    <Table>
+                        <TableHeader><TableRow>
+                            <TableHead className="whitespace-nowrap text-xs">Shift</TableHead>
+                            <TableHead className="whitespace-nowrap text-xs">Hari Kerja</TableHead>
+                            <TableHead className="whitespace-nowrap text-xs">Total Gaji</TableHead>
+                            <TableHead className="text-right whitespace-nowrap text-xs">Opsi</TableHead>
+                        </TableRow></TableHeader>
+                        <TableBody>
+                            {loading ? <TableRow><TableCell colSpan={4} className="text-center text-sm">Memuat...</TableCell></TableRow> : salaryData.map(data => {
+                              const isExpanded = expandedShiftId === data.id;
+                              return (
+                                <Fragment key={data.id}>
+                                    <TableRow onClick={() => setExpandedShiftId(isExpanded ? null : data.id)} className="cursor-pointer">
+                                        <TableCell className="font-semibold text-xs">{data.shift_name} <span className="text-muted-foreground">({data.lokasi})</span></TableCell>
+                                        <TableCell className="text-xs">{data.hariKerja} hari</TableCell>
+                                        <TableCell className="font-bold text-xs">Rp {data.gajiAkhir.toLocaleString('id-ID')}</TableCell>
+                                        <TableCell className="text-right">
+                                            <div className="flex items-center justify-end">
+                                                <Button variant="ghost" size="icon" className="h-7 w-7" onClick={(e) => { e.stopPropagation(); handleShiftFormOpen(data);}}><Edit className="h-4 w-4" /></Button>
+                                                <AlertDialog><AlertDialogTrigger asChild><Button variant="ghost" size="icon" className="h-7 w-7" onClick={(e) => e.stopPropagation()}><Trash2 className="h-4 w-4 text-red-600"/></Button></AlertDialogTrigger>
+                                                    <AlertDialogContent><AlertDialogHeader><AlertDialogTitle>Yakin hapus shift?</AlertDialogTitle><AlertDialogDescription>Tindakan ini akan menghapus shift dan semua aktivitas kasbon/libur yang terkait.</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel>Batal</AlertDialogCancel><AlertDialogAction onClick={() => handleDeleteShiftConfirm(data.id)}>Hapus</AlertDialogAction></AlertDialogFooter></AlertDialogContent>
+                                                </AlertDialog>
+                                                <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
+                                            </div>
+                                        </TableCell>
+                                    </TableRow>
+                                    {isExpanded && (
+                                        <TableRow className="bg-white dark:bg-background">
+                                            <TableCell colSpan={4} className="p-3 space-y-3">
+                                                <div className="space-y-2">
+                                                    <h4 className="font-semibold text-xs">Rincian Kasbon (-Rp {data.totalKasbon.toLocaleString('id-ID')})</h4>
+                                                    {data.activities.filter(a => a.type === 'kasbon').length > 0 ? (
+                                                        <ul className="space-y-1 text-xs">{data.activities.filter(a => a.type === 'kasbon').map(a => (
+                                                            <li key={a.id} className="p-2 rounded-md bg-muted/50"><div className="flex justify-between items-start gap-2">
+                                                                <div className="flex-1 min-w-0"><p className="break-words">{formatDateTime(a.activity_date).date} - <span className="font-semibold text-red-600">Rp {a.amount.toLocaleString('id-ID')}</span></p>{a.notes && <p className="text-xs text-muted-foreground break-words">{a.notes}</p>}</div>
+                                                                <div className="flex flex-shrink-0"><Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleActivityFormOpen('kasbon', a)}><Edit className="h-3 w-3"/></Button>
+                                                                    <AlertDialog><AlertDialogTrigger asChild><Button variant="ghost" size="icon" className="h-7 w-7"><Trash2 className="h-3 w-3 text-red-500"/></Button></AlertDialogTrigger>
+                                                                        <AlertDialogContent><AlertDialogHeader><AlertDialogTitle>Yakin hapus aktivitas?</AlertDialogTitle></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel>Batal</AlertDialogCancel><AlertDialogAction onClick={() => handleDeleteActivityConfirm(a.id)}>Hapus</AlertDialogAction></AlertDialogFooter></AlertDialogContent>
+                                                                    </AlertDialog>
+                                                                </div>
+                                                            </div></li>))}
+                                                        </ul>
+                                                    ) : <p className="text-xs text-muted-foreground pl-2">Tidak ada kasbon.</p>}
+                                                </div>
+                                                <div className="space-y-2">
+                                                    <h4 className="font-semibold text-xs">Rincian Libur ({data.totalLibur} hari)</h4>
+                                                    {data.activities.filter(a => a.type === 'libur').length > 0 ? (
+                                                        <ul className="space-y-1 text-xs">{data.activities.filter(a => a.type === 'libur').map(a => (
+                                                            <li key={a.id} className="p-2 rounded-md bg-muted/50"><div className="flex justify-between items-start gap-2">
+                                                                <div className="flex-1 min-w-0"><p className="break-words">{formatDateTime(a.activity_date).date}</p>{a.notes && <p className="text-xs text-muted-foreground break-words">{a.notes}</p>}</div>
+                                                                <div className="flex flex-shrink-0"><Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleActivityFormOpen('libur', a)}><Edit className="h-3 w-3"/></Button>
+                                                                    <AlertDialog><AlertDialogTrigger asChild><Button variant="ghost" size="icon" className="h-7 w-7"><Trash2 className="h-3 w-3 text-red-500"/></Button></AlertDialogTrigger>
+                                                                        <AlertDialogContent><AlertDialogHeader><AlertDialogTitle>Yakin hapus aktivitas?</AlertDialogTitle></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel>Batal</AlertDialogCancel><AlertDialogAction onClick={() => handleDeleteActivityConfirm(a.id)}>Hapus</AlertDialogAction></AlertDialogFooter></AlertDialogContent>
+                                                                    </AlertDialog>
+                                                                </div>
+                                                            </div></li>))}
+                                                        </ul>
+                                                    ) : <p className="text-xs text-muted-foreground pl-2">Tidak ada libur.</p>}
+                                                </div>
+                                            </TableCell>
+                                        </TableRow>
+                                    )}
+                                </Fragment>
+                              )})}
+                        </TableBody>
+                    </Table>
+                </div>
             </Card>
 
-            <Dialog open={isKasbonFormOpen} onOpenChange={setIsKasbonFormOpen}><DialogContent><DialogHeader><DialogTitle>Tambah Kasbon untuk {selectedShift?.shift_name} ({selectedShift?.lokasi})</DialogTitle></DialogHeader><form onSubmit={(e) => {e.preventDefault(); handleActivitySubmit('kasbon');}} className="space-y-4 pt-4"><Input type="date" value={kasbonForm.activity_date || ''} onChange={(e) => setKasbonForm(p => ({...p, activity_date: e.target.value}))} required/><Input placeholder="Jumlah Kasbon" value={kasbonForm.amount || ''} onChange={(e) => setKasbonForm(p => ({...p, amount: formatNumberInput(e.target.value)}))} required/><Textarea placeholder="Keterangan (opsional)" value={kasbonForm.notes || ''} onChange={(e) => setKasbonForm(p => ({...p, notes: e.target.value}))} /><DialogFooter><Button type="button" variant="outline" onClick={() => setIsKasbonFormOpen(false)}>Batal</Button><Button type="submit">Simpan</Button></DialogFooter></form></DialogContent></Dialog>
-            <Dialog open={isLiburFormOpen} onOpenChange={setIsLiburFormOpen}><DialogContent><DialogHeader><DialogTitle>Catat Libur untuk {selectedShift?.shift_name} ({selectedShift?.lokasi})</DialogTitle></DialogHeader><form onSubmit={(e) => {e.preventDefault(); handleActivitySubmit('libur');}} className="space-y-4 pt-4"><Input type="date" value={liburForm.activity_date || ''} onChange={(e) => setLiburForm(p => ({...p, activity_date: e.target.value}))} required/><Textarea placeholder="Alasan libur (opsional)" value={liburForm.notes || ''} onChange={(e) => setLiburForm(p => ({...p, notes: e.target.value}))} /><DialogFooter><Button type="button" variant="outline" onClick={() => setIsLiburFormOpen(false)}>Batal</Button><Button type="submit">Simpan</Button></DialogFooter></form></DialogContent></Dialog>
+            <Dialog open={isShiftFormOpen} onOpenChange={handleShiftFormClose}>
+                <DialogContent>
+                    <DialogHeader><DialogTitle>{editingShift ? 'Edit' : 'Tambah'} Shift</DialogTitle></DialogHeader>
+                    <form onSubmit={handleShiftSubmit} className="space-y-4 pt-4">
+                        <Input placeholder="Nama Shift" value={shiftForm.shift_name || ''} onChange={(e) => setShiftForm(p => ({...p, shift_name: e.target.value}))} required/>
+                        <Input placeholder="Lokasi" value={shiftForm.lokasi || ''} onChange={(e) => setShiftForm(p => ({...p, lokasi: e.target.value}))} required/>
+                        <Input placeholder="Uang Bulanan" value={shiftForm.daily_wage || ''} onChange={(e) => setShiftForm(p => ({...p, daily_wage: formatNumberInput(e.target.value)}))} required/>
+                        <DialogFooter>
+                            <Button type="button" variant="outline" onClick={handleShiftFormClose}>Batal</Button>
+                            <Button type="submit" className={primaryButtonStyles}>Simpan</Button>
+                        </DialogFooter>
+                    </form>
+                </DialogContent>
+            </Dialog>
+
+            <Dialog open={isActivityFormOpen} onOpenChange={handleActivityFormClose}>
+                <DialogContent>
+                    <DialogHeader><DialogTitle>{editingActivity?.id ? 'Edit' : 'Tambah'} {activityForm.type === 'kasbon' ? 'Kasbon' : 'Libur'}</DialogTitle></DialogHeader>
+                    <form onSubmit={handleActivitySubmit} className="space-y-4 pt-4">
+                        {!editingActivity && (
+                            <Select onValueChange={(value) => setActivityForm(p => ({...p, shift_id: value}))} required>
+                                <SelectTrigger><SelectValue placeholder="Pilih Shift" /></SelectTrigger>
+                                <SelectContent>{shifts.map(s => <SelectItem key={s.id} value={s.id}>{s.shift_name} - {s.lokasi}</SelectItem>)}</SelectContent>
+                            </Select>
+                        )}
+                        <Input type="date" value={activityForm.activity_date} onChange={(e) => setActivityForm(p => ({...p, activity_date: e.target.value}))} required/>
+                        {activityForm.type === 'kasbon' && <Input placeholder="Jumlah Kasbon" value={activityForm.amount || ''} onChange={(e) => setActivityForm(p => ({...p, amount: formatNumberInput(e.target.value)}))} required/>}
+                        <Textarea placeholder="Keterangan (opsional)" value={activityForm.notes || ''} onChange={(e) => setActivityForm(p => ({...p, notes: e.target.value}))} />
+                        <DialogFooter>
+                            <Button type="button" variant="outline" onClick={handleActivityFormClose}>Batal</Button>
+                            <Button type="submit" className={primaryButtonStyles}>Simpan</Button>
+                        </DialogFooter>
+                    </form>
+                </DialogContent>
+            </Dialog>
         </div>
     );
 };

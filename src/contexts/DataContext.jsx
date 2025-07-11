@@ -27,6 +27,12 @@ const deleteRecordAPI = async (tableName, condition) => {
     return { success: true };
 };
 
+const updateRecordAPI = async (tableName, id, updates) => {
+    const { data, error } = await supabase.from(tableName).update(updates).eq('id', id).select();
+    if (error) return { success: false, error: handleSupabaseError(error, `updating ${tableName}`) };
+    return { success: true, data: data ? data[0] : null };
+};
+
 
 // Create Context
 const DataContext = createContext(null);
@@ -55,6 +61,10 @@ export const DataProvider = ({ children }) => {
             setLoading(false);
         }
     }, []);
+    
+    useEffect(() => {
+        fetchAllData();
+    }, [fetchAllData]);
 
     const addTransactions = async (data) => {
         const result = await addMultipleRecordsAPI('transactions', data);
@@ -73,16 +83,38 @@ export const DataProvider = ({ children }) => {
         if (result.success) await fetchAllData();
         return result;
     };
+    
+    const updateShift = async (id, data) => {
+        const result = await updateRecordAPI('shifts', id, data);
+        if (result.success) await fetchAllData();
+        return result;
+    };
+
+    const deleteShift = async (id) => {
+        await deleteRecordAPI('shift_activities', { shift_id: id });
+        const result = await deleteRecordAPI('shifts', { id: id });
+        if (result.success) await fetchAllData();
+        return result;
+    };
+
 
     const addShiftActivity = async (data) => {
         const result = await addRecordAPI('shift_activities', data);
         if (result.success) await fetchAllData();
         return result;
     }
+    
+    const updateShiftActivity = async (id, data) => {
+        const result = await updateRecordAPI('shift_activities', id, data);
+        if (result.success) await fetchAllData();
+        return result;
+    };
 
-    useEffect(() => {
-        fetchAllData();
-    }, [fetchAllData]);
+    const deleteShiftActivity = async (id) => {
+        const result = await deleteRecordAPI('shift_activities', { id: id });
+        if (result.success) await fetchAllData();
+        return result;
+    };
 
     const value = useMemo(() => ({
         transactions,
@@ -92,7 +124,11 @@ export const DataProvider = ({ children }) => {
         addTransactions,
         deleteTransactionGroup,
         addShift,
-        addShiftActivity
+        updateShift,
+        deleteShift,
+        addShiftActivity,
+        updateShiftActivity,
+        deleteShiftActivity
     }), [transactions, shifts, shiftActivities, loading]);
 
     return (
