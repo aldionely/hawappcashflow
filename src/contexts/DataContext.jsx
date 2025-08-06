@@ -4,7 +4,8 @@ import { handleSupabaseError } from "@/lib/errorHandler";
 
 // API Service Functions
 const fetchFromTableAPI = async (tableName) => {
-    const { data, error } = await supabase.from(tableName).select('*').order('created_at', { ascending: false });
+    // Diubah dari 'created_at' menjadi 'id' untuk pengurutan yang konsisten
+    const { data, error } = await supabase.from(tableName).select('*').order('id', { ascending: false });
     if (error) return { success: false, error: handleSupabaseError(error, `fetching ${tableName}`) };
     return { success: true, data: data || [] };
 };
@@ -42,19 +43,22 @@ export const DataProvider = ({ children }) => {
     const [transactions, setTransactions] = useState([]);
     const [shifts, setShifts] = useState([]);
     const [shiftActivities, setShiftActivities] = useState([]);
+    const [saldoActivities, setSaldoActivities] = useState([]);
     const [loading, setLoading] = useState(true);
 
     const fetchAllData = useCallback(async () => {
         setLoading(true);
         try {
-            const [transactionsResult, shiftsResult, activitiesResult] = await Promise.all([
+            const [transactionsResult, shiftsResult, activitiesResult, saldoResult] = await Promise.all([
                 fetchFromTableAPI('transactions'),
                 fetchFromTableAPI('shifts'),
-                fetchFromTableAPI('shift_activities')
+                fetchFromTableAPI('shift_activities'),
+                fetchFromTableAPI('saldo_activities')
             ]);
             if (transactionsResult.success) setTransactions(transactionsResult.data || []);
             if (shiftsResult.success) setShifts(shiftsResult.data || []);
             if (activitiesResult.success) setShiftActivities(activitiesResult.data || []);
+            if (saldoResult.success) setSaldoActivities(saldoResult.data || []);
         } catch (e) {
             console.error(e);
         } finally {
@@ -116,10 +120,29 @@ export const DataProvider = ({ children }) => {
         return result;
     };
 
+    const addSaldoActivity = async (data) => {
+        const result = await addRecordAPI('saldo_activities', data);
+        if (result.success) await fetchAllData();
+        return result;
+    };
+
+    const updateSaldoActivity = async (id, data) => {
+        const result = await updateRecordAPI('saldo_activities', id, data);
+        if (result.success) await fetchAllData();
+        return result;
+    };
+
+    const deleteSaldoActivity = async (id) => {
+        const result = await deleteRecordAPI('saldo_activities', { id: id });
+        if (result.success) await fetchAllData();
+        return result;
+    };
+
     const value = useMemo(() => ({
         transactions,
         shifts,
         shiftActivities,
+        saldoActivities,
         loading,
         addTransactions,
         deleteTransactionGroup,
@@ -128,8 +151,11 @@ export const DataProvider = ({ children }) => {
         deleteShift,
         addShiftActivity,
         updateShiftActivity,
-        deleteShiftActivity
-    }), [transactions, shifts, shiftActivities, loading]);
+        deleteShiftActivity,
+        addSaldoActivity,
+        updateSaldoActivity, 
+        deleteSaldoActivity
+    }), [transactions, shifts, shiftActivities, saldoActivities, loading]);
 
     return (
         <DataContext.Provider value={value}>
