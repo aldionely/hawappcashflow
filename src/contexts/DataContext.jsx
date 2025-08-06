@@ -44,21 +44,24 @@ export const DataProvider = ({ children }) => {
     const [shifts, setShifts] = useState([]);
     const [shiftActivities, setShiftActivities] = useState([]);
     const [saldoActivities, setSaldoActivities] = useState([]);
+    const [arusSaldo, setArusSaldo] = useState([]);
     const [loading, setLoading] = useState(true);
 
     const fetchAllData = useCallback(async () => {
         setLoading(true);
         try {
-            const [transactionsResult, shiftsResult, activitiesResult, saldoResult] = await Promise.all([
+            const [transactionsResult, shiftsResult, activitiesResult, saldoResult, arusSaldoResult] = await Promise.all([
                 fetchFromTableAPI('transactions'),
                 fetchFromTableAPI('shifts'),
                 fetchFromTableAPI('shift_activities'),
-                fetchFromTableAPI('saldo_activities')
+                fetchFromTableAPI('saldo_activities'),
+                fetchFromTableAPI('arus_saldo')
             ]);
             if (transactionsResult.success) setTransactions(transactionsResult.data || []);
             if (shiftsResult.success) setShifts(shiftsResult.data || []);
             if (activitiesResult.success) setShiftActivities(activitiesResult.data || []);
             if (saldoResult.success) setSaldoActivities(saldoResult.data || []);
+            if (arusSaldoResult.success) setArusSaldo(arusSaldoResult.data || []);
         } catch (e) {
             console.error(e);
         } finally {
@@ -138,6 +141,24 @@ export const DataProvider = ({ children }) => {
         return result;
     };
 
+    const addArusSaldo = async (data) => {
+        const result = await addRecordAPI('arus_saldo', data);
+        if (result.success) await fetchAllData();
+        return result;
+    };
+
+    const updateArusSaldo = async (id, data) => {
+        const result = await updateRecordAPI('arus_saldo', id, data);
+        if (result.success) await fetchAllData();
+        return result;
+    };
+
+    const deleteArusSaldo = async (id) => {
+        const result = await deleteRecordAPI('arus_saldo', { id: id });
+        if (result.success) await fetchAllData();
+        return result;
+    };
+
     const value = useMemo(() => ({
         transactions,
         shifts,
@@ -154,8 +175,12 @@ export const DataProvider = ({ children }) => {
         deleteShiftActivity,
         addSaldoActivity,
         updateSaldoActivity, 
-        deleteSaldoActivity
-    }), [transactions, shifts, shiftActivities, saldoActivities, loading]);
+        deleteSaldoActivity,
+        arusSaldo,
+        addArusSaldo,
+        updateArusSaldo,
+        deleteArusSaldo,
+    }), [transactions, shifts, shiftActivities, saldoActivities, arusSaldo, loading]);
 
     return (
         <DataContext.Provider value={value}>
