@@ -1,3 +1,64 @@
+import React, { useState, useMemo, Fragment, useRef } from 'react';
+import { useData } from '@/contexts/DataContext';
+import { Button } from '@/components/ui/button';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
+import { useToast } from '@/components/ui/use-toast';
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { formatNumberInput, parseFormattedNumber, formatDateTime } from '@/lib/utils';
+import { PlusCircle, Trash2, ArrowDownCircle, DollarSign, ChevronDown, Download } from 'lucide-react';
+import jsPDF from 'jspdf';
+import html2canvas from 'html2canvas';
+
+// Komponen PDF dan StatCard perlu diimpor atau didefinisikan jika digunakan
+const KeuanganUmumPDFReport = ({ groupedTransactions, stats, filterInfo }) => (
+    <div className="p-8 bg-white" style={{ width: '800px' }}>
+        <div className="text-center mb-8">
+            <h1 className="text-3xl font-bold">Laporan Keuangan</h1>
+            <p className="text-gray-500">{filterInfo}</p>
+        </div>
+        <div className="mb-8">
+            <h2 className="text-xl font-semibold mb-4">Ringkasan Statistik</h2>
+            <div className="grid grid-cols-3 gap-4 text-sm">
+                <div className="bg-green-100 p-4 rounded-lg"><p className="text-muted-foreground">Total Pemasukan</p><p className="font-bold text-lg text-green-700">Rp {stats.totalUangMasuk.toLocaleString('id-ID')}</p></div>
+                <div className="bg-red-100 p-4 rounded-lg"><p className="text-muted-foreground">Total Pengeluaran</p><p className="font-bold text-lg text-red-700">- Rp {Math.abs(stats.totalUangKeluar).toLocaleString('id-ID')}</p></div>
+                <div className="bg-blue-100 p-4 rounded-lg"><p className="text-muted-foreground">Total Akhir</p><p className="font-bold text-lg text-blue-700">Rp {stats.totalSemua.toLocaleString('id-ID')}</p></div>
+            </div>
+        </div>
+        <div>
+            <h2 className="text-xl font-semibold mb-4">Rincian</h2>
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b">
+                  <th className="text-left p-2">Tanggal</th>
+                  <th className="text-left p-2">Keterangan</th>
+                  <th className="text-right p-2">Jumlah</th>
+                </tr>
+              </thead>
+              <tbody>
+                {groupedTransactions.map(group => {
+                  const { date } = formatDateTime(group.created_at);
+                  const isExpense = group.total < 0;
+                  const groupTitle = isExpense ? (group.item_taken || "Uang Keluar") : `${group.lokasi || 'Tanpa Lokasi'} - ${group.shift_name || 'Tanpa Shift'}`;
+                  return (
+                    <tr key={group.group_id} className="border-b">
+                      <td className="p-2">{date}</td>
+                      <td className="p-2">{groupTitle}</td>
+                      <td className={`p-2 text-right font-semibold ${isExpense ? 'text-red-600' : 'text-green-600'}`}>
+                        {isExpense ? '-' : '+'} Rp {Math.abs(group.total).toLocaleString('id-ID')}
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+        </div>
+    </div>
+);
+
 const KeuanganUmumTab = () => {
     const { transactions, loading, addTransactions, deleteTransactionGroup } = useData();
     const { toast } = useToast();
@@ -125,7 +186,7 @@ const KeuanganUmumTab = () => {
         return 'Laporan Semua Aktivitas';
     };
 
-    const StatCardKeuangan = ({ title, value, icon }) => ( <Card className="shadow-strong-pekat border-2 border-black"><CardHeader className="flex flex-row items-center justify-between space-y-0 p-3"><CardTitle className="text-xs font-medium">{title}</CardTitle>{icon}</CardHeader><CardContent className="p-3 pt-0"><div className="text-lg font-bold">Rp {Number(value).toLocaleString('id-ID')}</div></CardContent></Card> );
+    const StatCard = ({ title, value, icon }) => ( <Card className="shadow-strong-pekat border-2 border-black"><CardHeader className="flex flex-row items-center justify-between space-y-0 p-3"><CardTitle className="text-xs font-medium">{title}</CardTitle>{icon}</CardHeader><CardContent className="p-3 pt-0"><div className="text-lg font-bold">Rp {Number(value).toLocaleString('id-ID')}</div></CardContent></Card> );
 
     return (
         <div className="space-y-4">
@@ -144,9 +205,9 @@ const KeuanganUmumTab = () => {
             <section>
                 <h2 className="text-lg font-bold mb-2">Rincian Uang</h2>
                 <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 md:gap-4">
-                    <StatCardKeuangan title="Total Semua Uang" value={stats.totalSemua} icon={<DollarSign className="h-4 w-4 text-muted-foreground" />}/>
-                    <StatCardKeuangan title="Uang Keluar" value={Math.abs(stats.totalUangKeluar)} />
-                    {Object.entries(moneyCategories).map(([category]) => ( <StatCardKeuangan key={category} title={`Uang ${category}`} value={stats.kategori[category] || 0} /> ))}
+                    <StatCard title="Total Semua Uang" value={stats.totalSemua} icon={<DollarSign className="h-4 w-4 text-muted-foreground" />}/>
+                    <StatCard title="Uang Keluar" value={Math.abs(stats.totalUangKeluar)} />
+                    {Object.entries(moneyCategories).map(([category]) => ( <StatCard key={category} title={`Uang ${category}`} value={stats.kategori[category] || 0} /> ))}
                 </div>
                 <div className="mt-4 grid md:grid-cols-2 gap-4">
                     <Card className="shadow-strong-pekat border-2 border-black"><CardHeader className="p-4"><CardTitle className="text-sm">Detail Lokasi</CardTitle></CardHeader><CardContent className="p-4">{Object.keys(stats.totalPerLokasi).length > 0 ? ( <ul className="space-y-2 text-xs">{Object.entries(stats.totalPerLokasi).map(([lokasi, total]) => ( <li key={lokasi} className="flex justify-between"><span>{lokasi}</span><span className="font-semibold">Rp {Number(total).toLocaleString('id-ID')}</span></li> ))}</ul> ) : <p className="text-xs">Belum ada data lokasi.</p>}</CardContent></Card>

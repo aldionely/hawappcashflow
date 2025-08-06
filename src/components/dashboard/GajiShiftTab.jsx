@@ -1,3 +1,155 @@
+import React, { useState, useMemo, Fragment, useRef } from 'react';
+import { useData } from '@/contexts/DataContext';
+import { Button } from '@/components/ui/button';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
+import { useToast } from '@/components/ui/use-toast';
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { formatNumberInput, parseFormattedNumber, formatDateTime } from '@/lib/utils';
+import { ChevronDown, Download, Briefcase, Edit, Trash2 } from 'lucide-react';
+import jsPDF from 'jspdf';
+import html2canvas from 'html2canvas';
+
+// Komponen-komponen ini perlu diimpor atau didefinisikan di sini jika digunakan
+const GajiShiftReport = ({ salaryData }) => (
+    <>
+      {salaryData.map((data) => (
+        <div key={data.id} className="p-6 border rounded-lg shadow-md salary-report-item bg-white" data-id={data.id} style={{ width: '780px', fontFamily: 'sans-serif' }}>
+            <h2 className="text-xl font-semibold text-gray-800 border-b pb-2 mb-4">{data.shift_name} - {data.lokasi}</h2>
+            <div className="mt-2 mb-4">
+                <h3 className="font-semibold text-gray-700 mb-2 text-sm">Rincian Gaji {data.shift_name}</h3>
+                <div className="text-xs space-y-2 text-gray-600 border p-3 rounded-md bg-gray-50">
+                    <div className="flex justify-between items-center">
+                        <span>Terhitung ({data.hariKerja} hari kerja × Rp {data.daily_wage.toLocaleString('id-ID')})</span>
+                        <span className="font-medium">Rp {(data.hariKerja * data.daily_wage).toLocaleString('id-ID')}</span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                        <span>Total Kasbon</span>
+                        <span className="font-medium text-red-600">- Rp {data.totalKasbon.toLocaleString('id-ID')}</span>
+                    </div>
+                    <div className="flex justify-between items-center border-t mt-2 pt-2">
+                        <span className="font-bold">Total Diterima</span>
+                        <span className="font-bold text-blue-700">Rp {data.gajiAkhir.toLocaleString('id-ID')}</span>
+                    </div>
+                </div>
+            </div>
+            <div className="grid grid-cols-2 gap-6 pt-4 border-t mt-4">
+                <div>
+                    <h4 className="font-semibold text-gray-700 mb-2 text-sm">Rincian Kasbon</h4>
+                    {data.activities.filter(a => a.type === 'kasbon').length > 0 ? (
+                       <ul className="space-y-1 text-xs text-gray-600">
+                           {data.activities.filter(a => a.type === 'kasbon').map(a => (
+                               <li key={a.id} className="flex justify-between items-center p-1.5 bg-gray-50 rounded">
+                                   <span>{formatDateTime(a.activity_date).date}{a.notes ? ` (${a.notes})` : ''}</span>
+                                   <span className="font-semibold text-red-500">-Rp {a.amount.toLocaleString('id-ID')}</span>
+                               </li>
+                           ))}
+                       </ul>
+                    ) : <p className="text-xs text-gray-400">Tidak ada data.</p>}
+                </div>
+                <div>
+                    <h4 className="font-semibold text-gray-700 mb-2 text-sm">Rincian Libur ({data.totalLibur} hari)</h4>
+                    {data.activities.filter(a => a.type === 'libur').length > 0 ? (
+                        <ul className="space-y-1 text-xs text-gray-600">
+                            {data.activities.filter(a => a.type === 'libur').map(a => (
+                                <li key={a.id} className="flex items-center p-1.5 bg-gray-50 rounded">
+                                    {formatDateTime(a.activity_date).date}{a.notes ? ` (${a.notes})` : ''}
+                                </li>
+                            ))}
+                        </ul>
+                    ) : <p className="text-xs text-gray-400">Tidak ada data.</p>}
+                </div>
+            </div>
+        </div>
+      ))}
+    </>
+);
+
+const ShiftActivityPDFReport = ({ salaryData, filterMonth }) => {
+    const activitiesByDate = useMemo(() => {
+        const grouped = {};
+        salaryData.forEach(shift => {
+            shift.activities.forEach(activity => {
+                const date = activity.activity_date.slice(0, 10);
+                if (!grouped[date]) {
+                    grouped[date] = [];
+                }
+                grouped[date].push({
+                    ...activity,
+                    shift_name: shift.shift_name,
+                    lokasi: shift.lokasi,
+                });
+            });
+        });
+        return Object.keys(grouped).sort().reduce((obj, key) => {
+            obj[key] = grouped[key];
+            return obj;
+        }, {});
+    }, [salaryData]);
+
+    const formatDate = (dateString) => {
+        const date = new Date(dateString);
+        return date.toLocaleDateString('id-ID', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+    };
+
+    return (
+        <div className="p-8 bg-white" style={{ width: '800px', fontFamily: 'sans-serif' }}>
+            <div className="text-center mb-8">
+                <h1 className="text-3xl font-bold">Laporan Aktivitas Shift</h1>
+                <p className="text-gray-500">Bulan: {filterMonth}</p>
+            </div>
+            <div className="space-y-6">
+                {Object.entries(activitiesByDate).map(([date, activities]) => {
+                    const dailyTotalKasbon = activities
+                        .filter(a => a.type === 'kasbon')
+                        .reduce((sum, a) => sum + (a.amount || 0), 0);
+
+                    return (
+                        <div key={date}>
+                            <h2 className="text-lg font-semibold mb-2">{formatDate(date)}</h2>
+                            <table className="w-full text-xs" style={{ borderCollapse: 'collapse' }}>
+                                <thead>
+                                    <tr style={{ backgroundColor: '#374151', color: 'white' }}>
+                                        <th className="text-left p-2">Nama Shift</th>
+                                        <th className="text-left p-2">Lokasi</th>
+                                        <th className="text-left p-2">Tipe</th>
+                                        <th className="text-left p-2">Keterangan</th>
+                                        <th className="text-right p-2">Jumlah</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {activities.map((activity, index) => {
+                                        const rowStyle = index % 2 === 0 ? { backgroundColor: '#f9fafb' } : { backgroundColor: '#ffffff' };
+                                        return (
+                                            <tr key={activity.id} style={rowStyle}>
+                                                <td className="p-2 border-b">{activity.shift_name}</td>
+                                                <td className="p-2 border-b">{activity.lokasi}</td>
+                                                <td className="p-2 border-b capitalize">{activity.type}</td>
+                                                <td className="p-2 border-b">{activity.notes || '-'}</td>
+                                                <td className="p-2 border-b text-right font-medium">
+                                                    {activity.type === 'kasbon' ? `Rp ${activity.amount.toLocaleString('id-ID')}` : '-'}
+                                                </td>
+                                            </tr>
+                                        );
+                                    })}
+                                    <tr style={{ backgroundColor: '#e5e7eb', fontWeight: 'bold' }}>
+                                        <td colSpan="4" className="p-2 text-right">TOTAL KASBON HARIAN</td>
+                                        <td className="p-2 text-right">Rp {dailyTotalKasbon.toLocaleString('id-ID')}</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    );
+                })}
+            </div>
+        </div>
+    );
+};
+
 const GajiShiftTab = () => {
     const { shifts, shiftActivities, addShift, updateShift, deleteShift, addShiftActivity, updateShiftActivity, deleteShiftActivity, loading } = useData();
     const { toast } = useToast();
@@ -12,11 +164,8 @@ const GajiShiftTab = () => {
     const [expandedShiftId, setExpandedShiftId] = useState(null);
     const reportRef = useRef();
     const [isDownloading, setIsDownloading] = useState(false);
-
-    // Ref dan state baru untuk PDF Aktivitas
     const aktivitasReportRef = useRef();
     const [isDownloadingAktivitas, setIsDownloadingAktivitas] = useState(false);
-
     const primaryButtonStyles = "shadow-button-pekat border-black border-2 active:shadow-none text-xs sm:text-sm";
     
     const handleShiftFormOpen = (shift = null) => {
@@ -171,7 +320,6 @@ const GajiShiftTab = () => {
         pdf.save(`laporan-aktivitas-${filterMonth}.pdf`);
         setIsDownloadingAktivitas(false);
     };
-    
 
     return (
         <div className="space-y-4">
@@ -201,13 +349,11 @@ const GajiShiftTab = () => {
                     <Input type="month" value={filterMonth} onChange={(e) => setFilterMonth(e.target.value)} className="max-w-xs"/>
                 </CardContent>
             </Card>
-
             <div className="flex flex-wrap gap-2 justify-end">
                 <Button className={primaryButtonStyles} onClick={() => handleActivityFormOpen('kasbon')}>+ Kasbon</Button>
                 <Button className={primaryButtonStyles} onClick={() => handleActivityFormOpen('libur')}>+ Libur</Button>
                 <Button className={primaryButtonStyles} onClick={() => handleShiftFormOpen()}><Briefcase className="mr-1 h-4 w-4"/> Tambah Shift</Button>
             </div>
-            
             <Card>
                 <div className="overflow-x-auto">
                     <Table>

@@ -1,3 +1,18 @@
+import React, { useState, useMemo } from 'react';
+import { useData } from '@/contexts/DataContext';
+import { Button } from '@/components/ui/button';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
+import { Input } from '@/components/ui/input';
+import { useToast } from '@/components/ui/use-toast';
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { formatNumberInput, parseFormattedNumber, formatDateTime } from '@/lib/utils';
+import { PlusCircle, Trash2, Download, Edit } from 'lucide-react';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
+
 const SaldoTab = () => {
     const { saldoActivities, addSaldoActivity, updateSaldoActivity, deleteSaldoActivity, loading } = useData();
     const { toast } = useToast();
@@ -6,8 +21,6 @@ const SaldoTab = () => {
     const [filterMonth, setFilterMonth] = useState(new Date().toISOString().slice(0, 7));
     const [filterLocation, setFilterLocation] = useState('Semua');
     const [isDownloading, setIsDownloading] = useState(false);
-
-    // State for editing
     const [editingSaldo, setEditingSaldo] = useState(null);
     const [isEditFormOpen, setIsEditFormOpen] = useState(false);
 
@@ -22,7 +35,6 @@ const SaldoTab = () => {
     const resetForm = () => setFormState({ datetime: new Date().toISOString().slice(0, 16) });
     const handleFormOpenChange = (open) => { if (!open) resetForm(); setIsFormOpen(open); };
     
-    // Handlers for edit dialog
     const handleEditFormOpen = (saldo) => {
         setEditingSaldo(saldo);
         setFormState({
@@ -93,7 +105,6 @@ const SaldoTab = () => {
 
 
     const filteredSaldo = useMemo(() => {
-        // Hapus .sort() karena data sudah diurutkan dari server
         return saldoActivities.filter(item => {
             const itemMonth = item.created_at.slice(0, 7);
             const monthMatch = itemMonth === filterMonth;
@@ -112,7 +123,6 @@ const SaldoTab = () => {
         const doc = new jsPDF();
         const pageWidth = doc.internal.pageSize.getWidth();
     
-        // Tambah Judul
         doc.setFontSize(18);
         doc.text("Rincian Saldo Flip", pageWidth / 2, 20, { align: 'center' });
         doc.setFontSize(15);
@@ -127,19 +137,10 @@ const SaldoTab = () => {
             const { date, time } = formatDateTime(item.created_at);
     
             if (lastDate !== null && date !== lastDate) {
-                // Tambahkan baris pemisah kosong
                 tableBody.push([{ content: '', colSpan: 6, styles: { fillColor: '#fff', minCellHeight: 5 } }]);
             }
     
-            tableBody.push([
-                date,
-                time,
-                item.lokasi,
-                item.aplikasi,
-                `Rp ${item.nominal.toLocaleString('id-ID')}`,
-                '' // Kolom status kosong
-            ]);
-    
+            tableBody.push([ date, time, item.lokasi, item.aplikasi, `Rp ${item.nominal.toLocaleString('id-ID')}`, '' ]);
             lastDate = date;
         });
     
@@ -149,29 +150,15 @@ const SaldoTab = () => {
             body: tableBody,
             theme: 'grid',
             headStyles: {
-                fillColor: [255, 255, 255], // Latar belakang header putih
-                textColor: [0, 0, 0],       // Teks header hitam
-                fontStyle: 'bold',
-                halign: 'center',
-                valign: 'middle',
-                lineColor: [20, 20, 20], 
-                lineWidth: 0.1,
+                fillColor: [255, 255, 255], textColor: [0, 0, 0], fontStyle: 'bold',
+                halign: 'center', valign: 'middle', lineColor: [20, 20, 20], lineWidth: 0.1,
             },
-            styles: {
-                valign: 'middle', // Posisi vertikal tengah untuk semua sel
-                lineColor: [20, 20, 20],
-                lineWidth: 0.1,
-            },
+            styles: { valign: 'middle', lineColor: [20, 20, 20], lineWidth: 0.1, },
             columnStyles: {
-                0: { halign: 'center' }, // Tanggal
-                1: { halign: 'center' }, // Jam
-                2: { halign: 'center' }, // Lokasi
-                3: { halign: 'left' },   // Aplikasi
-                4: { halign: 'center' }, // Nominal
-                5: { halign: 'center' }, // Status
+                0: { halign: 'center' }, 1: { halign: 'center' }, 2: { halign: 'center' },
+                3: { halign: 'left' }, 4: { halign: 'center' }, 5: { halign: 'center' },
             },
             didParseCell: function (data) {
-                // Menghilangkan border untuk baris pemisah
                 if (data.row.raw?.[0]?.colSpan === 6) {
                     data.cell.styles.lineColor = [20, 20, 20];
                 }
