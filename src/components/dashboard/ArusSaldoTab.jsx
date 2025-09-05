@@ -101,10 +101,13 @@ const ArusSaldoTab = () => {
     const reportRef = useRef();
 
     const filteredArusSaldo = useMemo(() => {
+        let filtered;
         if (filterMode === 'daily') {
-            return arusSaldo.filter(item => getLocalDateString(item.created_at) === selectedDate);
+            filtered = arusSaldo.filter(item => getLocalDateString(item.created_at) === selectedDate);
+        } else { // monthly
+            filtered = arusSaldo.filter(item => item.created_at.startsWith(filterMonth));
         }
-        return arusSaldo.filter(item => item.created_at.startsWith(filterMonth));
+        return filtered.sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
     }, [arusSaldo, filterMode, selectedDate, filterMonth]);
     
     const handleInputChange = (e, field) => {
@@ -171,18 +174,76 @@ const ArusSaldoTab = () => {
     };
 
     const stats = useMemo(() => {
-        const totals = filteredArusSaldo.reduce((acc, item) => {
+        // Fungsi baru untuk menghitung running balance secara akurat
+        const calculateRunningBalance = (transactions) => {
+            const groupedByDay = transactions.reduce((acc, t) => {
+                const date = getLocalDateString(t.created_at);
+                if (!acc[date]) acc[date] = [];
+                acc[date].push(t);
+                return acc;
+            }, {});
+    
+            const sortedDays = Object.keys(groupedByDay).sort();
+    
+            let runningSaldo = 0;
+            let runningUang = 0;
+    
+            for (const day of sortedDays) {
+                const dayTotals = groupedByDay[day].reduce((acc, item) => {
+                    acc[item.type] = (acc[item.type] || 0) + item.nominal;
+                    return acc;
+                }, {});
+    
+                const daySaldoAwal = dayTotals['SALDO_AWAL'] !== undefined ? dayTotals['SALDO_AWAL'] : runningSaldo;
+                const dayUangAwal = dayTotals['UANG_AWAL'] !== undefined ? dayTotals['UANG_AWAL'] : runningUang;
+    
+                runningSaldo = daySaldoAwal + (dayTotals['SALDO_MASUK'] || 0) - (dayTotals['SALDO_KELUAR'] || 0);
+                runningUang = dayUangAwal + (dayTotals['UANG_MASUK'] || 0) - (dayTotals['UANG_KELUAR'] || 0);
+            }
+    
+            return { saldoAkhir: runningSaldo, uangAkhir: runningUang };
+        };
+    
+        let carryOverSaldo = 0;
+        let carryOverUang = 0;
+        
+        // Dapatkan semua transaksi sebelum periode yang dipilih
+        const allTransactionsSorted = [...arusSaldo].sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
+        
+        let transactionsBeforePeriod = [];
+        if (filterMode === 'daily') {
+            transactionsBeforePeriod = allTransactionsSorted.filter(
+                item => getLocalDateString(item.created_at) < selectedDate
+            );
+        } else { // monthly
+            const firstDayOfMonth = filterMonth + '-01';
+            transactionsBeforePeriod = allTransactionsSorted.filter(
+                item => getLocalDateString(item.created_at) < firstDayOfMonth
+            );
+        }
+        
+        // Hitung saldo akhir dari semua transaksi sebelumnya
+        if (transactionsBeforePeriod.length > 0) {
+            const carryOverStats = calculateRunningBalance(transactionsBeforePeriod);
+            carryOverSaldo = carryOverStats.saldoAkhir;
+            carryOverUang = carryOverStats.uangAkhir;
+        }
+    
+        // Hitung total untuk periode saat ini
+        const currentTotals = filteredArusSaldo.reduce((acc, item) => {
             acc[item.type] = (acc[item.type] || 0) + item.nominal;
             return acc;
         }, {});
-
-        const saldoAwal = totals['SALDO_AWAL'] || 0;
-        const uangAwal = totals['UANG_AWAL'] || 0;
-        const saldoMasuk = totals['SALDO_MASUK'] || 0;
-        const saldoKeluar = totals['SALDO_KELUAR'] || 0;
-        const uangMasuk = totals['UANG_MASUK'] || 0;
-        const uangKeluar = totals['UANG_KELUAR'] || 0;
-
+    
+        // Gunakan nilai carry-over jika tidak ada input manual Saldo/Uang Awal
+        const saldoAwal = currentTotals['SALDO_AWAL'] !== undefined ? currentTotals['SALDO_AWAL'] : carryOverSaldo;
+        const uangAwal = currentTotals['UANG_AWAL'] !== undefined ? currentTotals['UANG_AWAL'] : carryOverUang;
+    
+        const saldoMasuk = currentTotals['SALDO_MASUK'] || 0;
+        const saldoKeluar = currentTotals['SALDO_KELUAR'] || 0;
+        const uangMasuk = currentTotals['UANG_MASUK'] || 0;
+        const uangKeluar = currentTotals['UANG_KELUAR'] || 0;
+    
         return {
             saldoAwal,
             uangAwal,
@@ -193,7 +254,7 @@ const ArusSaldoTab = () => {
             saldoAkhir: saldoAwal + saldoMasuk - saldoKeluar,
             uangAkhir: uangAwal + uangMasuk - uangKeluar,
         };
-    }, [filteredArusSaldo]);
+    }, [arusSaldo, filterMode, selectedDate, filterMonth, filteredArusSaldo]);
 
     const getFormTitle = () => {
         if (editingItem) return 'Edit Catatan';
@@ -236,7 +297,7 @@ const ArusSaldoTab = () => {
             }, {});
     
             let yPos = 30;
-            let carryOver = { saldo: 0, uang: 0 };
+            let carryOver = { saldo: stats.saldoAwal, uang: stats.uangAwal };
     
             Object.keys(groupedByDate).sort().forEach((date, index) => {
                 if (yPos > 250) {
